@@ -1,0 +1,14 @@
+fecha_hora: 2024-08-14 15:42:17
+numero_serie: AAA
+numero_lote: AA
+fabricante: AAA
+fecha_fabricacion: 05/08/24
+fecha_vencimiento: 12/08/24
+tipo_modelo: AAA
+peso: 11
+talla: AAA
+proveniente: AAA
+orden_id: 20240814154217
+foto_url: C:\Users\Emanuel\Desktop\chaleco\captura.png
+Foto: captura.png
+QR: 20240814154217_qr.png

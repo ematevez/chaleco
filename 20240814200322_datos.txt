@@ -1,0 +1,13 @@
+fecha_hora: 2024-08-14 20:03:22
+numero_serie: 2222-000
+numero_lote: tttt
+fabricante: rrrrr
+fecha_fabricacion: 1/7/24
+fecha_vencimiento: 2/8/24
+tipo_modelo: tgggg
+peso: 33
+talla: 444
+proveniente: 3333
+orden_id: 20240814200322
+Foto: captura.png
+QR: 20240814200322_qr.png

@@ -1,0 +1,17 @@
+<BluetoothApp>:
+    orientation: 'vertical'
+
+    Label:
+        id: status_label
+        text: "Bluetooth Status: Checking..."
+        size_hint: (1, 0.2)
+
+    Button:
+        text: "Check Paired Devices"
+        size_hint: (1, 0.2)
+        on_press: root.check_bluetooth()
+
+    Label:
+        id: device_label
+        text: "Paired Devices:"
+        size_hint: (1, 0.6)
