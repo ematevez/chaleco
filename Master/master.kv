@@ -1,0 +1,97 @@
+BoxLayout:
+    orientation: 'vertical'
+    
+    GridLayout:
+        cols: 2
+        rows: 10
+        padding: [20, 20]
+        spacing: 10
+        
+        Label:
+            text: 'Lote:'
+        TextInput:
+            id: lote_input
+            multiline: False
+
+        Label:
+            text: 'Número de Serie:'
+        TextInput:
+            id: numero_serie_input
+            multiline: False
+
+        Label:
+            text: 'Fabricante:'
+        TextInput:
+            id: fabricante_input
+            multiline: False
+
+        Label:
+            text: 'Fecha de Fabricación:'
+        TextInput:
+            id: fecha_fabricacion_input
+            multiline: False
+
+        Label:
+            text: 'Fecha de Vencimiento:'
+        TextInput:
+            id: fecha_vencimiento_input
+            multiline: False
+
+        Label:
+            text: 'Tipo/Modelo:'
+        TextInput:
+            id: tipo_modelo_input
+            multiline: False
+
+        Label:
+            text: 'Peso (kg):'
+        TextInput:
+            id: peso_input
+            multiline: False
+
+        Label:
+            text: 'Talla:'
+        TextInput:
+            id: talla_input
+            multiline: False
+
+        Label:
+            text: 'Procedencia:'
+        TextInput:
+            id: procedencia_input
+            multiline: False
+
+    BoxLayout:
+        orientation: 'horizontal'
+        size_hint_y: None
+        height: '48dp'
+        padding: [20, 10]
+        spacing: 10
+
+        Button:
+            id: comenzar_lote
+            text: 'Comenzar Lote'
+            on_press: root.comenzar_lote()
+
+        Button:
+            id: finalizar_lote
+            text: 'Finalizar Lote'
+            on_press: root.finalizar_lote()
+            disabled: True
+
+        Button:
+            id: agregar_chaleco
+            text: 'Agregar Chaleco'
+            on_press: root.agregar_chaleco()
+            disabled: True
+
+        Button:
+            id: ver_registros
+            text: 'Ver Registros'
+            on_press: root.ver_registros()
+            disabled: True
+
+        Button:
+            id: transmision_wifi
+            text: 'Transmisión por WiFi'
+            on_press: root.transmision_wifi()

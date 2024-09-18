@@ -1,0 +1,11 @@
+Lote: L3822-20240917, Serie: 111, Fabricante: 111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 22-02-24, Tipo: 2, Peso: 2, Talla: 2, Procedencia: 2
+Lote: L3822-20240917, Serie: 1111, Fabricante: 1111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 22-02-24, Tipo: 22, Peso: 22, Talla: 22, Procedencia: 22
+Lote: L3822-20240917, Serie: 1111, Fabricante: 1111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 22-02-24, Tipo: 22, Peso: 22, Talla: 22, Procedencia: 22
+Lote: L9099-20240917, Serie: 1111, Fabricante: 1111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 22-02-24, Tipo: 22, Peso: 22, Talla: 22, Procedencia: 22
+Lote: L7490-20240917, Serie: 1111, Fabricante: 1111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 22-02-24, Tipo: 22, Peso: 22, Talla: 22, Procedencia: 22
+Lote: L7490-20240917, Serie: 1111, Fabricante: 1111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 22-02-24, Tipo: 22, Peso: 22, Talla: 22, Procedencia: 22
+L8255-20240917,111,11,11-11-02,02-02-24,111,11,11,11,enviado
+11111, pendiente
+2222, pendiente
+11111, pendiente
+2222, pendiente
