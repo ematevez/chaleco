@@ -6,3 +6,5 @@ Master
 Slave
 |
 > App de pc portatil (recibe datos pero no conecta solo escucha a revisar)
+>
+> source  ~/Desktop/new_env/Scripts/activate
