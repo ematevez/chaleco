@@ -1,5 +1,5 @@
 # Chaleco V1-V2-V3
-#Master
+# Master
 |
 > App de servidor (Master3 funcional)
 > ### Falta transmision de wifi esta (cuenta de ema)
@@ -9,7 +9,7 @@
 >    ## ACOMODAR QR - IMPRIMIR
 >    ## DATA PIKET DE FECHAS
 >     
-#Slave
+# Slave
 |
 > App de pc portatil (recibe datos pero no conecta solo escucha a revisar)
 >   ##
