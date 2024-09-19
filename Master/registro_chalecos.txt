@@ -1,5 +1,0 @@
-Lote: L2079-20240918, Serie: 111, Fabricante: 111, Fecha Fabricación: 11-11-11, Fecha Vencimiento: 11-11-11, Tipo: 11, Peso: 11, Talla: 11, Procedencia: 11
-Lote: L2079-20240918, Serie: 22, Fabricante: 22, Fecha Fabricación: 22-22-22, Fecha Vencimiento: 22-22-22, Tipo: 22, Peso: 22, Talla: 22, Procedencia: 22
-Lote: L1167-20240918, Serie: 3333, Fabricante: 3333, Fecha Fabricación: 33-33-33, Fecha Vencimiento: 33-33-33, Tipo: 333, Peso: 333, Talla: 333, Procedencia: 333
-Lote: L3345-20240918, Serie: 444, Fabricante: 444, Fecha Fabricación: 44-44-44, Fecha Vencimiento: 44-44-44, Tipo: 444, Peso: 44, Talla: 44, Procedencia: 444
-Lote: L3345-20240918, Serie: 555, Fabricante: 555, Fecha Fabricación: 55, Fecha Vencimiento: 555, Tipo: 55, Peso: 55, Talla: 55, Procedencia: 555
