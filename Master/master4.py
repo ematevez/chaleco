@@ -17,12 +17,15 @@ from kivy.uix.image import Image as KivyImage
 from kivy.core.image import Image as CoreImage
 from kivy.uix.spinner import Spinner
 from io import BytesIO
-import base64
 from dateutil import parser
 import tempfile
 import os
 import platform
 import subprocess
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import tempfile
+import os
 
 class DatePicker(BoxLayout):
     def __init__(self, on_select, **kwargs):
@@ -89,8 +92,8 @@ class ChalecoApp(App):
         
         return self.root
 
+    # Añadir columna qr_imagen en la tabla si no existe
     def create_db(self):
-        """Crear la tabla chalecos si no existe"""
         cursor = self.conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS chalecos (
@@ -103,6 +106,7 @@ class ChalecoApp(App):
                 peso TEXT,
                 talla TEXT,
                 procedencia TEXT,
+                qr_image BLOB,  
                 transmitido INTEGER DEFAULT 0
             )
         ''')
@@ -170,10 +174,44 @@ class ChalecoApp(App):
         self.root.add_widget(self.transmitir_wifi_button)
         self.root.add_widget(self.ver_registro_button)
 
+
+# Validar que la fecha de vencimiento sea mayor a la fecha de fabricación
+    def validar_orden_fechas(self):
+        """Valida que la fecha de vencimiento sea mayor que la de fabricación"""
+        try:
+            # Asegúrate de usar datetime.datetime.strptime, no datetime.strptime
+            fecha_fabricacion = datetime.datetime.strptime(self.fecha_fabricacion_input.text, '%Y-%m-%d')
+            fecha_vencimiento = datetime.datetime.strptime(self.fecha_vencimiento_input.text, '%Y-%m-%d')
+            
+            # La fecha de vencimiento debe ser mayor a la de fabricación
+            if fecha_vencimiento > fecha_fabricacion:
+                return True
+            else:
+                return False
+        except ValueError:
+            # Manejo de error en caso de que el formato de fecha sea incorrecto
+            self.mostrar_popup('Error', 'Formato de fecha incorrecto. Use YYYY-MM-DD')
+            return False
+
+
+    # Función para verificar duplicados
+    def verificar_lote_existente(self, lote):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM chalecos WHERE lote=?", (lote,))
+        count = cursor.fetchone()[0]
+        return count > 0
+    
+    # Modificar la función comenzar_lote para evitar duplicados
     def comenzar_lote(self, instance):
         lote_id = random.randint(1000, 9999)
         fecha_actual = datetime.datetime.now().strftime("%Y%m%d")
         lote_numero = f"L{lote_id}-{fecha_actual}"
+        
+        # Verificar si el lote ya existe
+        if self.verificar_lote_existente(lote_numero):
+            self.mostrar_popup('Error', 'Número de lote ya existe, intenta nuevamente.')
+            return
+        
         self.lote_input.text = lote_numero
 
         self.add_chaleco_button.disabled = False
@@ -184,19 +222,28 @@ class ChalecoApp(App):
         self.mostrar_popup('Lote Comenzado', f'Se ha comenzado el lote: {lote_numero}')
 
     def agregar_chaleco(self, instance):
-        if not self.campos_llenos():
-            self.mostrar_popup('Error', 'Complete todos los campos antes de agregar un chaleco')
-            return
+        try:
+            if not self.campos_llenos():
+                self.mostrar_popup('Error', 'Complete todos los campos antes de agregar un chaleco')
+                return
 
-        if not self.validar_fechas():
-            self.mostrar_popup('Error', 'Formato de fecha incorrecto. Use YYYY-MM-DD')
-            return
+            if not self.validar_fechas():
+                self.mostrar_popup('Error', 'Formato de fecha incorrecto. Use YYYY-MM-DD')
+                return
 
-        self.guardar_chaleco()
-        self.limpiar_campos()
+            if not self.validar_orden_fechas():
+                self.mostrar_popup('Error', 'La fecha de vencimiento no puede ser menor o igual que la fecha de fabricación')
+                return
 
-        # Generar QR con la información del chaleco
-        self.generar_qr(self.lote_input.text, self.numero_serie_input.text)
+            self.guardar_chaleco()
+            self.limpiar_campos()
+
+            # Generar QR con la información del chaleco
+            self.generar_qr()  # Llamar a generar_qr sin pasarle argumentos
+
+        except Exception as e:
+            self.mostrar_popup('Error', f'Error inesperado: {str(e)}')
+
 
     def limpiar_campos(self):
         self.numero_serie_input.text = ''
@@ -226,63 +273,117 @@ class ChalecoApp(App):
         ''', (lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia))
         self.conn.commit()
 
-    def generar_qr(self, lote, numero_serie):
-        # Generar el código QR con la información del chaleco
-        datos_qr = f'Lote: {lote}, Serie: {numero_serie}'
-        qr = qrcode.make(datos_qr)
-        buffer = BytesIO()
-        qr.save(buffer, format="PNG")
-        buffer.seek(0)
+    # Modificar la función generar_qr para incluir toda la información y guardar en base de datos
+    def generar_qr(self):
+        # Extraer los datos del chaleco desde la base de datos utilizando el número de lote
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia
+            FROM chalecos
+            WHERE lote = ?
+        ''', (self.lote_input.text,))
+        chaleco = cursor.fetchone()
 
-        # Crear la textura de la imagen
-        image_texture = CoreImage(buffer, ext="png").texture
-        image = KivyImage(texture=image_texture, size_hint=(1, 1))
+        if chaleco:
+            # Descomponer los datos del chaleco para formar el string del código QR
+            lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia = chaleco
 
-        # Crear un layout para el popup
-        layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        layout.add_widget(Label(text='Chaleco registrado correctamente', size_hint=(1, 0.2)))
-        layout.add_widget(image)
+            datos_qr = f"Lote: {lote}, Serie: {numero_serie}, Fabricante: {fabricante}, " \
+                    f"Fecha de Fabricación: {fecha_fabricacion}, Fecha de Vencimiento: {fecha_vencimiento}, " \
+                    f"Modelo: {tipo_modelo}, Peso: {peso}, Talla: {talla}, Procedencia: {procedencia}"
 
-        # Añadir un botón para cerrar el popup y otro para imprimir
-        botones_layout = BoxLayout(size_hint=(1, 0.2), spacing=10)
-        btn_cerrar = Button(text='Cerrar')
-        btn_imprimir = Button(text='Imprimir QR')
-        botones_layout.add_widget(btn_cerrar)
-        botones_layout.add_widget(btn_imprimir)
-        layout.add_widget(botones_layout)
+            # Generar el código QR con todos los datos extraídos
+            qr = qrcode.make(datos_qr)
+            buffer = BytesIO()
+            qr.save(buffer, format="PNG")
+            buffer.seek(0)
 
-        # Crear el popup
-        popup = Popup(title='Registro Exitoso', content=layout, size_hint=(0.6, 0.6))
-        btn_cerrar.bind(on_press=popup.dismiss)
-        btn_imprimir.bind(on_press=lambda x: self.imprimir_qr(buffer, popup))
-        popup.open()
+            # Guardar la imagen del QR en la base de datos
+            self.guardar_imagen_qr(buffer.getvalue())
 
-    def imprimir_qr(self, buffer, popup):
+            # Mostrar la imagen del QR en la interfaz
+            image_texture = CoreImage(buffer, ext="png").texture
+            image = KivyImage(texture=image_texture, size_hint=(1, 1))
+
+            layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
+            layout.add_widget(Label(text='Chaleco registrado correctamente', size_hint=(1, 0.2)))
+            layout.add_widget(image)
+
+            botones_layout = BoxLayout(size_hint=(1, 0.2), spacing=10)
+            btn_cerrar = Button(text='Cerrar')
+            btn_imprimir = Button(text='Imprimir')
+            botones_layout.add_widget(btn_imprimir)
+            botones_layout.add_widget(btn_cerrar)
+            layout.add_widget(botones_layout)
+
+            popup = Popup(title='Registro Exitoso', content=layout, size_hint=(0.6, 0.6))
+            btn_cerrar.bind(on_press=popup.dismiss)
+            btn_imprimir.bind(on_press=lambda _: self.imprimir_qr(buffer, popup))
+            popup.open()
+        else:
+            self.mostrar_popup('Error', 'No se encontró el chaleco en la base de datos.')
+
+    def crear_pdf_qr(self, qr_image_data, lote):
+        # Crear un archivo temporal para el PDF
+        temp_pdf_path = os.path.join(tempfile.gettempdir(), f"qr_chaleco_{lote}.pdf")
+        
+        # Crear el lienzo de PDF
+        c = canvas.Canvas(temp_pdf_path, pagesize=letter)
+        width, height = letter
+        
+        # Agregar texto y el código QR
+        c.setFont("Helvetica", 12)
+        c.drawString(100, height - 100, f"Chaleco - Lote: {lote}")
+        
+        # Guardar la imagen del código QR en el PDF
+        qr_temp_path = os.path.join(tempfile.gettempdir(), f"qr_{lote}.png")
+        with open(qr_temp_path, 'wb') as f:
+            f.write(qr_image_data.getvalue())
+
+        
+        # Colocar la imagen en el PDF
+        c.drawImage(qr_temp_path, 200, height - 300, 150, 150)
+        
+        # Finalizar y guardar el PDF
+        c.showPage()
+        c.save()
+        
+        # Eliminar el archivo temporal del QR si ya no es necesario
+        os.remove(qr_temp_path)
+        
+        return temp_pdf_path
+
+
+
+    def guardar_imagen_qr(self, qr_bytes):
+        """Guardar la imagen del código QR en la base de datos"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE chalecos SET qr_image = ? WHERE lote = ?
+        ''', (sqlite3.Binary(qr_bytes), self.lote_input.text))
+        self.conn.commit()
+    
+    def imprimir_qr(self, qr_image_data, popup):
+        # Obtener el número de lote para el nombre del archivo PDF
+        lote = self.lote_input.text
+        
+        # Generar el PDF con el QR
+        pdf_path = self.crear_pdf_qr(qr_image_data, lote)
+        
+        # Intentar abrir el PDF para imprimir (dependiendo del sistema operativo)
         try:
-            # Guardar la imagen en un archivo temporal
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
-                tmp_file.write(buffer.getvalue())
-                tmp_filename = tmp_file.name
-
-            sistema = platform.system()
-
-            if sistema == 'Windows':
-                # Comando para imprimir en Windows
-                os.startfile(tmp_filename, "print")
-            elif sistema == 'Darwin':  # macOS
-                subprocess.run(['open', '-a', 'Preview', tmp_filename])
-                subprocess.run(['lp', tmp_filename])
-            else:  # Linux y otros
-                subprocess.run(['lp', tmp_filename])
-
-            self.mostrar_popup('Éxito', 'Código QR enviado a la impresora.')
+            if os.name == 'nt':  # Windows
+                os.startfile(pdf_path, "print")
+            elif os.name == 'posix':  # Linux/Mac
+                os.system(f"lpr {pdf_path}")
+            else:
+                self.mostrar_popup('Error', 'No se pudo abrir el archivo para imprimir.')
         except Exception as e:
-            self.mostrar_popup('Error', f'Error al imprimir: {str(e)}')
-        finally:
-            # Cerrar el popup anterior
-            popup.dismiss()
-            # Opcionalmente, eliminar el archivo temporal después de un tiempo
-            # os.remove(tmp_filename)
+            self.mostrar_popup('Error', f'Error al intentar imprimir: {str(e)}')
+
+        # Cerrar el popup de éxito
+        popup.dismiss()
+
 
     def finalizar_lote(self, instance):
         if not self.campos_llenos():
@@ -300,6 +401,7 @@ class ChalecoApp(App):
         self.comenzar_lote_button.disabled = False
 
         self.mostrar_popup('Lote Finalizado', 'El lote ha sido finalizado y los chalecos han sido registrados.')
+    
 
     def abrir_pantalla_transmision(self, instance):
         # Crear la nueva ventana para seleccionar los registros
@@ -375,35 +477,36 @@ class ChalecoApp(App):
             cursor.execute("UPDATE chalecos SET transmitido=1 WHERE lote=? AND numero_serie=?", (registro[0], registro[1]))
         self.conn.commit()
 
+    
+    # Modificar la función para transmitir QR por WiFi
     def transmitir_wifi(self, datos):
         try:
             # IP y puerto de destino (asegúrate de que estos valores sean correctos)
-            ip_destino = '192.168.10.10'  # Cambia esto por la IP del servidor receptor (slave)
-            puerto_destino = 8000  # El puerto debe coincidir con el del receptor (slave)
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Cambiado a SOCK_STREAM para usar TCP
-
+            ip_destino = '192.168.10.10'
+            puerto_destino = 8000
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            
             # Conectar al servidor
             sock.connect((ip_destino, puerto_destino))
 
             # Enviar datos
             sock.sendall(datos.encode())
-
-            # Esperar confirmación del servidor
-            sock.settimeout(5)  # Tiempo máximo de espera (5 segundos)
-            try:
-                respuesta = sock.recv(1024)  # Tamaño máximo de mensaje recibido
-                if respuesta.decode() == "Registros recibidos correctamente.":
-                    self.mostrar_popup('Éxito', 'Datos transmitidos y confirmados por el servidor')
-                else:
-                    self.mostrar_popup('Error', 'Error en la confirmación del servidor')
-            except socket.timeout:
-                self.mostrar_popup('Error', 'Tiempo de espera agotado. El servidor no respondió.')
+            
+            # Recibir confirmación del servidor
+            sock.settimeout(5)
+            respuesta = sock.recv(1024)
+            if respuesta.decode() == "Registros recibidos correctamente.":
+                self.mostrar_popup('Éxito', 'Datos transmitidos y confirmados por el servidor')
+            else:
+                self.mostrar_popup('Error', 'Error en la confirmación del servidor')
             
             sock.close()
-
         except Exception as e:
             self.mostrar_popup('Error', f'Error al transmitir: {str(e)}')
-
+        
+    
+    
+    
     def ver_registro(self, instance):
         layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
         scroll_view = ScrollView(size_hint=(1, 0.9))
@@ -483,13 +586,20 @@ class ChalecoApp(App):
             self.procedencia_input.text
         ])
 
+
+
+
+# Validar fechas (vencimiento mayor a fabricación)
     def validar_fechas(self):
+        """Valida que las fechas tengan el formato correcto"""
         try:
             parser.parse(self.fecha_fabricacion_input.text)
             parser.parse(self.fecha_vencimiento_input.text)
             return True
         except ValueError:
+            self.mostrar_popup('Error', 'El formato de fecha es incorrecto. Por favor use el formato YYYY-MM-DD')
             return False
+
 
     def mostrar_popup(self, titulo, mensaje, boton_texto='Cerrar', boton_callback=None):
         layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
