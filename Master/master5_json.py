@@ -22,8 +22,9 @@ import tempfile
 import os
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-import tempfile
-import os
+import base64
+
+import json
 
 class DatePicker(BoxLayout):
     def __init__(self, on_select, **kwargs):
@@ -80,7 +81,7 @@ class ChalecoApp(App):
     def build(self):
         # Configurar la ventana en pantalla completa
         Window.fullscreen = True  # Puedes usar 'auto' o True
-        self.conn = sqlite3.connect('chalecos.db')
+        self.conn = sqlite3.connect('chalecos.db', check_same_thread=False)
         self.create_db()
         self.root = BoxLayout(orientation='vertical', padding=10, spacing=10)
         self.create_widgets()
@@ -421,7 +422,7 @@ class ChalecoApp(App):
         grid_layout.add_widget(titulo_layout)
 
         cursor = self.conn.cursor()
-        cursor.execute("SELECT lote, numero_serie, fabricante, tipo_modelo FROM chalecos WHERE transmitido=0")
+        cursor.execute("SELECT * FROM chalecos WHERE transmitido=0")
         registros = cursor.fetchall()
 
         self.checkboxes = []
@@ -455,19 +456,46 @@ class ChalecoApp(App):
         self.popup_transmision.open()
 
     def enviar_seleccion(self, instance):
+        # Obtener los registros seleccionados donde los checkboxes están activos
         registros_seleccionados = [registro for checkbox, registro in self.checkboxes if checkbox.active]
 
         if registros_seleccionados:
-            # Transmitir los registros seleccionados
-            datos_transmitir = "\n".join([f"Lote: {reg[0]}, Serie: {reg[1]}, Fabricante: {reg[2]}" for reg in registros_seleccionados])
+            datos_transmitir = []
+            for reg in registros_seleccionados:
+                # Verificar si el campo de la imagen QR no es None
+                if reg[9] is not None:
+                    qr_image_base64 = base64.b64encode(reg[9]).decode('utf-8')  # reg[9] es el campo de la imagen QR
+                else:
+                    qr_image_base64 = 'No QR available'  # Mensaje por si el QR es None
+                
+                # Agregar los datos como un diccionario (más fácil de convertir a JSON)
+                datos_transmitir.append({
+                    "Lote": reg[0],
+                    "Número de Serie": reg[1],
+                    "Fabricante": reg[2],
+                    "Fecha de Fabricación": reg[3],
+                    "Fecha de Vencimiento": reg[4],
+                    "Tipo de Modelo": reg[5],
+                    "Peso": reg[6],
+                    "Talla": reg[7],
+                    "Procedencia": reg[8],
+                    "QR Image": qr_image_base64
+                })
+
+            # Transmitir los datos seleccionados vía Wi-Fi o el método deseado
             self.transmitir_wifi(datos_transmitir)
 
-            # Actualizar los registros transmitidos
+            # Marcar los registros como transmitidos en la base de datos
             self.marcar_registros_como_transmitidos(registros_seleccionados)
 
+            # Mostrar mensaje de éxito
             self.mostrar_popup('Éxito', 'Registros transmitidos con éxito')
         else:
+            # Mostrar mensaje de error si no se seleccionó ningún registro
             self.mostrar_popup('Error', 'No se seleccionaron registros para transmitir')
+
+
+
 
     def marcar_registros_como_transmitidos(self, registros_seleccionados):
         cursor = self.conn.cursor()
@@ -475,46 +503,49 @@ class ChalecoApp(App):
             cursor.execute("UPDATE chalecos SET transmitido=1 WHERE lote=? AND numero_serie=?", (registro[0], registro[1]))
         self.conn.commit()
 
-    
-    # Modificar la función para transmitir QR por WiFi
     def transmitir_wifi(self, datos):
         try:
-            # IP y puerto de destino (asegúrate de que estos valores sean correctos)
-            # ip_destino = '192.168.10.10'
-            # ip_destino = '192.168.10.114'
             ip_destino = '192.168.1.54'
             puerto_destino = 8000
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            
-            # Aumentar el tiempo de espera para la conexión
-            sock.settimeout(10)  # 10 segundos de espera para la conexión
-            
+
+            sock.settimeout(20)  # 20 segundos de espera para la conexión
+
             # Conectar al servidor
             sock.connect((ip_destino, puerto_destino))
 
-            # Enviar datos
-            sock.sendall(datos.encode())
-            
+            # Convertir la lista de datos en JSON
+            datos_json = json.dumps({"data": datos})
+
+            # Mostrar datos JSON para depuración
+            print("=================datos_json=========")
+            print(datos_json)
+
+            # Enviar los datos al servidor
+            sock.sendall(datos_json.encode('utf-8'))
+
             # Recibir confirmación del servidor
-            sock.settimeout(10)
+            sock.settimeout(20)
             respuesta = sock.recv(1024)
-            
-            print(f"Mensaje recibido del servidor: '{respuesta}'")
-            
+
+            print(f"Mensaje recibido del servidor: '{respuesta.decode()}'")
+
             if respuesta.decode() == "OK" or respuesta.decode() == "":
                 self.mostrar_popup('Éxito', 'Datos transmitidos y confirmados por el servidor')
             else:
                 self.mostrar_popup('Error', 'Error en la confirmación del servidor')
-                
-            
+
+            # Cerrar el socket
             sock.close()
-            
+
         except socket.timeout:
             self.mostrar_popup('Error', 'Error de tiempo de espera en la transmisión (timeout)')
         except Exception as e:
             self.mostrar_popup('Error', f'Error al transmitir: {str(e)}')
-    
-    
+
+
+
+        
     def ver_registro(self, instance):
         layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
         scroll_view = ScrollView(size_hint=(1, 0.9))
