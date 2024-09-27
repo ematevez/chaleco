@@ -1,3 +1,7 @@
+"""
+SCRIPTS PARA VOLVER LOS DATOS DE TRANSMISION A 0 PARA REUTILIZAR
+"""
+
 import sqlite3
 
 def update_transmitidos(db_path):
