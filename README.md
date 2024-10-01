@@ -36,7 +36,7 @@ El cliente Slave está diseñado para ser ejecutado en un PC portátil, y su pro
 - Acomodar la visualización de datos.
 - Verificar los datos en la base de datos y seleccionar qué chaleco destruir.
 - Habilitar el uso de la cámara para escanear los códigos QR.
-#### Slave_11 (Última versión 25/09 - Funcional)
+#### Slave_12 (Última versión 25/09 - Funcional)
 - **Recibe datos y los guarda en la base de datos, incluyendo los códigos QR**.
 - **Visualización de datos**: No implementado aún.
   
@@ -44,7 +44,23 @@ El cliente Slave está diseñado para ser ejecutado en un PC portátil, y su pro
 - Escanear un código QR y verificar si coincide con un registro existente.
 #### cam / cam1 funcional del codigo qr_test con problemas del pyzbar
 ---
+
+#### Slave_21 ->  
+- Se estabilizo con pyzbar -> version de yolo mas funcional falta integrar  slave_21 con slave_12 solo funcion detectar
+-# IMPORTANTE! Mejorar la impresion de los datos del qr - utilizar id para armarlo sino duplicidad de lota
+
+
 ### Ejemplo de Activación del Entorno Virtual
+
 Para activar el entorno virtual del proyecto:
 ```bash
 source ~/Desktop/new_env/Scripts/activate
+
+
+A revisar ->
+https://github.com/yushulx/python-barcode-qrcode-sdk/tree/main/examples/official/9.x/yolo_qr
+https://github.com/yushulx/python-barcode-qrcode-sdk/tree/main/examples/official/9.x/webcam
+
+
+https://github.com/Eric-Canas/QReader
+https://github.com/ErenKaymakci/Real-Time-QR-Detection-and-Decoding
