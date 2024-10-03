@@ -285,20 +285,16 @@ class ChalecoApp(App):
         # Extraer los datos del chaleco desde la base de datos utilizando el ID
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT id, lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia
-            FROM chalecos
-            WHERE id = ?
+            SELECT id, lote, numero_serie  FROM chalecos  WHERE id = ?
         ''', (chaleco_id,))  # Ahora se busca por ID
         chaleco = cursor.fetchone()
 
         if chaleco:
             # Descomponer los datos del chaleco para formar el string del código QR
-            id_chaleco, lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia = chaleco
+            id_chaleco, lote, numero_serie = chaleco
 
             # Incluir el `id` en los datos del código QR
-            datos_qr = f"ID: {id_chaleco}, Lote: {lote}, Serie: {numero_serie}, Fabricante: {fabricante}, " \
-                    f"Fecha de Fabricación: {fecha_fabricacion}, Fecha de Vencimiento: {fecha_vencimiento}, " \
-                    f"Modelo: {tipo_modelo}, Peso: {peso}, Talla: {talla}, Procedencia: {procedencia}"
+            datos_qr = f"ID: {id_chaleco}, Lote: {lote}, Serie: {numero_serie}"
 
             # Generar el código QR con todos los datos extraídos
             qr = qrcode.make(datos_qr)
@@ -474,10 +470,10 @@ class ChalecoApp(App):
                 # Verificar si el campo de la imagen QR no es None
                 if reg[9] is not None:
                     # Si reg[9] es un string, lo convertimos a bytes antes de codificarlo
-                    if isinstance(reg[9], str):
-                        qr_image_base64 = base64.b64encode(reg[9].encode('utf-8')).decode('utf-8')
+                    if isinstance(reg[9], bytes):
+                        qr_image_base64 = base64.b64encode(reg[9]).decode('utf-8')
                     else:
-                        qr_image_base64 = base64.b64encode(reg[9]).decode('utf-8')  # reg[9] es el campo de la imagen QR
+                        qr_image_base64 = base64.b64encode(reg[9].encode('utf-8')).decode('utf-8')  # reg[9] es el campo de la imagen QR
                 else:
                     qr_image_base64 = 'No QR available'  # Mensaje por si el QR es None
 
