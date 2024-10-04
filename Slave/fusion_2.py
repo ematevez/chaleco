@@ -581,47 +581,55 @@ def start_server():
     print(f"Servidor escuchando en {host}:{port}...")
 
     while server_running:
-        client_socket, client_address = server_socket.accept()
-        print(f"Conexión recibida de {client_address}")
-
-        # Mostrar un popup cuando se conecta un cliente
-        show_popup_data(f"Cliente conectado desde {client_address[0]}", title="Cliente conectado")
-
-        
-        data = b""
-        while True:
-            packet = client_socket.recv(1024)
-            if not packet:
-                break
-            data += packet
-
-        print(f"Datos recibidos: {data.decode('utf-8')}")
-
         try:
-            chaleco_data = json.loads(data.decode('utf-8'))
-            print(f"Datos JSON decodificados correctamente: {chaleco_data}")
+            client_socket, client_address = server_socket.accept()
+            print(f"Conexión recibida de {client_address}")
+            show_popup_data(f"Servidor escuchando en {host}:{port}...", title="Servidor Iniciado")
 
-            if isinstance(chaleco_data['data'], list):
-                for chaleco in chaleco_data['data']:
-                    insert_data(chaleco)
-                # Enviar confirmación "OK" para marcarlo como transmitido
-                client_socket.sendall("OK".encode('utf-8'))
-            else:
-                print("Error: formato de datos incorrecto, 'data' debe ser una lista de chalecos")
-                client_socket.sendall("Formato de datos incorrecto".encode('utf-8'))
 
-        except json.JSONDecodeError as e:
-            print(f"Error al decodificar JSON: {e}")
-            print("Datos que causaron el error:", data.decode('utf-8'))
-            client_socket.sendall("Error al decodificar JSON".encode('utf-8'))
+            # Mostrar un popup cuando se conecta un cliente
+            show_popup_data(f"Cliente conectado desde {client_address[0]}", title="Cliente conectado")
 
-        client_socket.close()
+            data = b""
+            while True:
+                packet = client_socket.recv(1024)
+                if not packet:
+                    break
+                data += packet
+
+            print(f"Datos recibidos: {data.decode('utf-8')}")
+
+            # Intentamos decodificar el JSON
+            try:
+                chaleco_data = json.loads(data.decode('utf-8'))
+                print(f"Datos JSON decodificados correctamente: {chaleco_data}")
+
+                if isinstance(chaleco_data['data'], list):
+                    for chaleco in chaleco_data['data']:
+                        insert_data(chaleco)
+
+                    # Enviar confirmación "OK" para marcarlo como transmitido
+                    client_socket.sendall("OK".encode('utf-8'))
+                else:
+                    print("Error: formato de datos incorrecto, 'data' debe ser una lista de chalecos")
+                    client_socket.sendall("Formato de datos incorrecto".encode('utf-8'))
+
+            except json.JSONDecodeError as e:
+                print(f"Error al decodificar JSON: {e}")
+                client_socket.sendall("Error al decodificar JSON".encode('utf-8'))
+
+        except Exception as e:
+            print(f"Error en la comunicación con el cliente: {str(e)}")
+
+        finally:
+            # Asegurarse de que el socket del cliente se cierre después de manejar la solicitud
+            client_socket.close()
 
     server_socket.close()
     print("Servidor detenido.")
     # Mostrar un popup cuando se cierra el servidor
     show_popup_data("Conexión finalizada. El servidor ha sido detenido.", title="Servidor detenido")
-
+    
 def generate_pdf_report():
     print("Informe PDF generado")
 

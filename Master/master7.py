@@ -590,24 +590,27 @@ class ChalecoApp(App):
             sock.sendall(datos_json.encode('utf-8'))
 
             # Recibir confirmación del servidor
-            respuesta = sock.recv(1024)
+            try:
+                respuesta = sock.recv(1024)  # Reducido a 5 segundos
+                if respuesta.decode() == "OK":
+                    self.mostrar_popup('Éxito', 'Datos transmitidos y confirmados por el servidor')
+                else:
+                    self.mostrar_popup('Error', f'Error en la confirmación del servidor: {respuesta.decode()}')
+            except socket.timeout:
+                self.mostrar_popup('Error', 'Error de tiempo de espera en la confirmación del servidor', auto_close_time=2)
 
-            print(f"Mensaje recibido del servidor: '{respuesta.decode()}'")
-
-            #if respuesta.decode() == "OK" or respuesta.decode() == "":
-            if respuesta.decode() == "OK":
-                self.mostrar_popup('Éxito', 'Datos transmitidos y confirmados por el servidor')
-            else:
-                self.mostrar_popup('Error', 'Error en la confirmación del servidor')
-
-            # Cerrar el socket
+            # Cerrar el socket después de recibir respuesta
             sock.close()
 
         except socket.timeout:
-            ... #SE QUEDA TILDADO
+            # Manejo del timeout si no se logra conectar
             self.mostrar_popup('Error', 'Error de tiempo de espera en la transmisión (timeout)', auto_close_time=2)
         except Exception as e:
+            # Manejo general de errores
             self.mostrar_popup('Error', f'Error al transmitir: {str(e)}', auto_close_time=10)
+        finally:
+            # Cierre seguro del socket en caso de cualquier excepción
+            sock.close()
 
         
     def ver_registro(self, instance):

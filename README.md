@@ -64,3 +64,6 @@ https://github.com/yushulx/python-barcode-qrcode-sdk/tree/main/examples/official
 
 https://github.com/Eric-Canas/QReader
 https://github.com/ErenKaymakci/Real-Time-QR-Detection-and-Decoding
+
+
+https://www.dynamsoft.com/customer/license/trialLicenseList (Hasta el 3 de noviembre)
