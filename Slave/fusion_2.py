@@ -375,7 +375,7 @@ class ChalecoApp(App):
         layout.add_widget(scan_qr_button)
 
         # Botón para iniciar el servidor
-        start_server_button = Button(text="Iniciar servidor", on_press=self.on_start_server)
+        start_server_button = Button(text="Iniciar servidor", background_color=(1, 0, 0, 1), on_press=self.on_start_server)
         layout.add_widget(start_server_button)
 
         # Botón para generar el informe PDF
