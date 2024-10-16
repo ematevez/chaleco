@@ -114,17 +114,49 @@ class DatePicker(BoxLayout):
             popup.open()
 
 class ChalecoApp(App):
+    
+    def obtener_ip_local(self):
+        """Obtiene la IP local de la máquina en la red."""
+        try:
+            # Obtener el nombre de host
+            hostname = socket.gethostname()
+
+            # Obtener la IP local asociada al nombre del host
+            ip_local = socket.gethostbyname(hostname)
+
+            # Alternativa más confiable para obtener la IP de la red en caso de que `gethostbyname` falle:
+            # Crear un socket UDP hacia un destino arbitrario (sin enviar datos) para obtener la IP correcta.
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(0)
+            try:
+                # No se envía nada, solo se usa para obtener la IP de la interfaz conectada
+                s.connect(('10.254.254.254', 1))
+                ip_local = s.getsockname()[0]
+            except Exception:
+                ip_local = '127.0.0.1'  # En caso de error, IP local por defecto (localhost)
+            finally:
+                s.close()
+
+            return ip_local
+
+        except Exception as e:
+            print(f"Error al obtener la IP local: {str(e)}")
+            return '127.0.0.1'  # Devuelve localhost si ocurre algún error
 
     def build(self):
         # Configurar la ventana en pantalla completa
-        Window.fullscreen = True  # Puedes usar 'auto' o True
+        # Window.fullscreen = True  # Puedes usar 'auto' o True
         self.conn = sqlite3.connect('chalecos.db', check_same_thread=False)
         self.create_db()
         self.root = BoxLayout(orientation='vertical', padding=10, spacing=10)
         self.create_widgets()
 
         # IP por defecto para transmitir WiFi
-        self.ip_destino = '192.168.10.142'  # Esta es la IP inicial por defecto
+        # self.ip_destino = '192.168.1.33'  # Esta es la IP inicial por defecto
+        
+        # Obtener la IP local automáticamente
+        self.ip_destino = self.obtener_ip_local()  # IP automáticamente asignada
+        print(f"IP local detectada: {self.ip_destino}")
         
         # Habilitar el uso de las teclas de flecha para moverse entre los campos de texto
         Window.bind(on_key_down=self.on_key_down)
@@ -327,6 +359,9 @@ class ChalecoApp(App):
             
             # Guardar el chaleco y obtener su ID
             chaleco_id = self.guardar_chaleco()
+            
+            # DEBUG: Verifica que chaleco_id es diferente para cada chaleco
+            print(f"Generando QR para chaleco ID: {chaleco_id}")
 
             # Generar QR con la información del chaleco
             self.generar_qr(chaleco_id)  # Ahora se pasa el ID como argumento
@@ -344,19 +379,19 @@ class ChalecoApp(App):
         self.fecha_vencimiento_input.text = ''
         self.tipo_modelo_input.text = ''
         self.peso_input.text = ''
-        self.talla_spinner.text = ''
+        self.talla_spinner.text = 'Seleccionar Talla'
         self.procedencia_input.text = ''
 
     def guardar_chaleco(self):
-        lote = self.lote_input.text
-        numero_serie = self.numero_serie_input.text
-        fabricante = self.fabricante_input.text
-        fecha_fabricacion = self.fecha_fabricacion_input.text
-        fecha_vencimiento = self.fecha_vencimiento_input.text
-        tipo_modelo = self.tipo_modelo_input.text
-        peso = self.peso_input.text
-        talla = self.talla_spinner.text
-        procedencia = self.procedencia_input.text
+        lote = self.lote_input.text.strip().upper()
+        numero_serie = self.numero_serie_input.text.strip().upper()
+        fabricante = self.fabricante_input.text.strip().upper()
+        fecha_fabricacion = self.fecha_fabricacion_input.text.strip()
+        fecha_vencimiento = self.fecha_vencimiento_input.text.strip()
+        tipo_modelo = self.tipo_modelo_input.text.strip().upper()
+        peso = self.peso_input.text.strip().upper()
+        talla = self.talla_spinner.text.strip().upper()
+        procedencia = self.procedencia_input.text.strip().upper()
 
         cursor = self.conn.cursor()
         cursor.execute('''
@@ -391,6 +426,9 @@ class ChalecoApp(App):
 
             # Guardar la imagen del QR en la base de datos (opcional)
             self.guardar_imagen_qr(buffer.getvalue(), id_chaleco)
+            
+            #DEBUG QUE GENERO
+            print(f"QR generado para chaleco {id_chaleco} - Lote: {lote}, Número de Serie: {numero_serie}")
 
             # Mostrar la imagen del QR en la interfaz
             image_texture = CoreImage(buffer, ext="png").texture
@@ -448,11 +486,15 @@ class ChalecoApp(App):
 
     def guardar_imagen_qr(self, qr_bytes, chaleco_id):
         """Guardar la imagen del código QR en la base de datos usando el id del chaleco"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            UPDATE chalecos SET qr_image = ? WHERE id = ?
-        ''', (sqlite3.Binary(qr_bytes), chaleco_id))  # Usar el id del chaleco para actualizar el registro
-        self.conn.commit()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                UPDATE chalecos SET qr_image = ? WHERE id = ?
+            ''', (sqlite3.Binary(qr_bytes), chaleco_id))  # Usar el id del chaleco para actualizar el registro
+            self.conn.commit()
+            print(f"QR guardado en la base de datos para chaleco ID: {chaleco_id}")
+        except Exception as e:
+            print(f"Error al guardar el QR para el chaleco ID {chaleco_id}: {e}")
 
     def imprimir_qr(self, qr_image_data, popup):
         # Obtener el número de lote para el nombre del archivo PDF
@@ -477,20 +519,47 @@ class ChalecoApp(App):
 
 
     def finalizar_lote(self, instance):
-        if not self.campos_llenos():
-            self.mostrar_popup('Error', 'Complete todos los campos antes de finalizar el lote')
+        # Obtener el lote actual
+        lote_actual = self.lote_input.text
+
+        # Verificar si hay un lote activo
+        if not lote_actual:
+            self.mostrar_popup('Error', 'No se ha comenzado ningún lote.')
             return
 
-        if not self.validar_fechas():
-            self.mostrar_popup('Error', 'Formato de fecha incorrecto. Use YYYY-MM-DD')
-            return
+        # Obtener todos los chalecos del lote actual
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id FROM chalecos WHERE lote = ?", (lote_actual,))
+        chalecos = cursor.fetchall()
 
-        self.guardar_chaleco()
+        # Generar un QR para cada chaleco del lote
+        if chalecos:
+            for chaleco in chalecos:
+                chaleco_id = chaleco[0]
+                self.generar_qr(chaleco_id)
+
+            self.mostrar_popup('Lote Finalizado', 'El lote ha sido finalizado y los chalecos han sido registrados.')
+        else:
+            self.mostrar_popup('Error', 'No se encontraron chalecos en este lote.')
+
+        # Finalizar el lote
+        # Guardar el chaleco y obtener su ID
+        chaleco_id = self.guardar_chaleco()
+            
+        # DEBUG: Verifica que chaleco_id es diferente para cada chaleco
+        print(f"Generando QR para chaleco ID: {chaleco_id}")
+
+        # Generar QR con la información del chaleco
+        self.generar_qr(chaleco_id)  # Ahora se pasa el ID como argumento
+        # Limpiar los campos de entrada
+        self.limpiar_campos()
+        
+    
         self.add_chaleco_button.disabled = True
         self.finalizar_lote_button.disabled = True
         self.comenzar_lote_button.disabled = False
 
-        self.mostrar_popup('Lote Finalizado', 'El lote ha sido finalizado y los chalecos han sido registrados.')
+        
     
 
     def abrir_pantalla_transmision(self, instance):
@@ -554,10 +623,10 @@ class ChalecoApp(App):
             datos_transmitir = []
             for reg in registros_seleccionados:
                 # Verificar si el campo de la imagen QR no es None
-                if isinstance(reg[9], bytes):
-                    qr_image_base64 = base64.b64encode(reg[9]).decode('utf-8')
-                elif isinstance(reg[9], str):
-                    qr_image_base64 = reg[9]  # Asumimos que ya es un string Base64
+                if isinstance(reg[10], bytes):
+                    qr_image_base64 = base64.b64encode(reg[10]).decode('utf-8')
+                elif isinstance(reg[10], str):
+                    qr_image_base64 = reg[10]  # Asumimos que ya es un string Base64
                 else:
                     qr_image_base64 = 'No QR available'
 
@@ -758,37 +827,30 @@ class ChalecoApp(App):
             return False
 
 
-    def mostrar_popup(self, titulo, mensaje, boton_texto='Cerrar', boton_callback=None, auto_close_time=None):
+    def mostrar_popup(self, titulo, mensaje, boton_texto='Cerrar', auto_close_time=None):
         # Crear el layout del popup
         layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
         label = Label(text=mensaje, size_hint=(1, 0.8), halign='center', valign='middle')
         label.bind(size=label.setter('text_size'))  # Para alinear el texto
         layout.add_widget(label)
         
-        # Crear el botón y asignar la acción de cierre o el callback personalizado
+        # Crear el botón "Cerrar"
         btn = Button(text=boton_texto, size_hint=(1, 0.2))
-        
-        # Si se proporciona un callback personalizado, usarlo
-        if boton_callback:
-            btn.bind(on_press=boton_callback)
-        else:
-            # Si no hay callback, cerrar el popup
-            btn.bind(on_press=lambda x: self.popup_actual.dismiss())
+        btn.bind(on_press=lambda x: self.popup_actual.dismiss())  # Acción para cerrar el popup
         layout.add_widget(btn)
 
-        # Crear el popup
+        # Crear el popup y asignarlo a self.popup_actual
         self.popup_actual = Popup(
             title=titulo,
             content=layout,
             size_hint=(0.5, 0.3),  # 50% de ancho, 30% de alto de la ventana
-            auto_dismiss=False
+            auto_dismiss=False  # Evitar el cierre automático sin presionar el botón
         )
         self.popup_actual.open()
 
         # Si se ha definido un tiempo para cerrarse automáticamente
         if auto_close_time:
             Clock.schedule_once(lambda dt: self.popup_actual.dismiss(), auto_close_time)
-
 
     def abrir_datepicker_fabricacion(self, instance):
         layout = DatePicker(on_select=self.set_fecha_fabricacion)

@@ -55,7 +55,7 @@ El cliente Slave está diseñado para ser ejecutado en un PC portátil, y su pro
 Para activar el entorno virtual del proyecto:
 ```bash
 source ~/Desktop/new_env/Scripts/activate
-
+source ~/Desktop/chaleco/.venv/scripts/activate
 
 A revisar ->
 https://github.com/yushulx/python-barcode-qrcode-sdk/tree/main/examples/official/9.x/yolo_qr
@@ -67,3 +67,4 @@ https://github.com/ErenKaymakci/Real-Time-QR-Detection-and-Decoding
 
 
 https://www.dynamsoft.com/customer/license/trialLicenseList (Hasta el 3 de noviembre)
+
