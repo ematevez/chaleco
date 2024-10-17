@@ -19,7 +19,7 @@ import sqlite3
 import base64
 import time
 import threading
-import numpy as np
+
 from datetime import datetime
 from kivy.app import App
 from kivy.uix.button import Button
@@ -480,10 +480,20 @@ class ChalecoApp(App):
         # Redimensionar la imagen
         frame = cv2.resize(frame, (800, 600))
 
-        # Agregar texto de identificación y fecha/hora actual, junto con "DESTRUIDO"
-        texto = f"ID: {id}, Lote: {lote}, Serie: {numero_serie}, Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, DESTRUIDO"
+        # Agregar texto de identificación y fecha/hora actual
+        texto = f"ID: {id}, Lote: {lote}, Serie: {numero_serie}, Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         cv2.putText(frame, texto, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
+        # Agregar la palabra "DESTRUIDO" en rojo, en una segunda línea y con un tamaño de fuente mayor
+        cv2.putText(frame, "DESTRUIDO", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+
+        # Modificar el nombre del archivo para que incluya "DESTRUIDO" al final
+        nombre_archivo = f"{id}_{lote}_{numero_serie}_{datetime.now().strftime('%Y%m%d%H%M%S')}_DESTRUIDO.png"
+
+        # Guardar la imagen en el archivo modificado
+        cv2.imwrite(nombre_archivo, frame)
+        print(f"Captura guardada como: {nombre_archivo}")
+        
         # Guardar la imagen en un archivo .png
         cv2.imwrite(nombre_archivo, frame)
         print(f"Captura guardada como: {nombre_archivo}")

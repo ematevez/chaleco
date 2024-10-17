@@ -3,10 +3,10 @@ Este proyecto incluye varias versiones de aplicaciones (Master y Slave) para la 
 ---
 ## Master
 El servidor Master está diseñado para gestionar la transmisión de datos y recibir información de chalecos (incluyendo QR) a través de conexiones de red.
-### Funcionalidades Implementadas:
+
 #### Master V3
 - **Funcionalidad del servidor completa**.
-- **Pendiente**: Implementación de la transmisión por Wi-Fi (cuenta de ema).
+<!-- - **Pendiente**: Implementación de la transmisión por Wi-Fi (cuenta de ema). -->
   
 ### TODO:
 - Acomodar la visualización de los datos.
@@ -14,18 +14,24 @@ El servidor Master está diseñado para gestionar la transmisión de datos y rec
 - Implementar un **Date Picker** para las fechas.
 #### Master V4 (Funcional)
 - **Transmisión funcional**.
-- **Pendiente**: Transmisión por Wi-Fi (cuenta de ema).
+<!-- - **Pendiente**: Transmisión por Wi-Fi (cuenta de ema). -->
   
 ### TODO:
 - Visualización de datos funcional.
-- Acomodar la impresión de códigos QR (Funcional).
-- Implementar un **Date Picker** para las fechas (Funcional).
-- Opción para copiar la base de datos o incluir la opción de verificación mediante "check".
-- Acomodar la gestión de lotes.
+<!-- - Acomodar la impresión de códigos QR (Funcional). -->
+<!-- - Implementar un **Date Picker** para las fechas (Funcional). -->
+<!-- - Opción para copiar la base de datos o incluir la opción de verificación mediante "check". -->
+<!-- - Acomodar la gestión de lotes. -->
 #### Master V5 (Funcional)
 ### TODO:
 - Arreglar la confirmación de envío, que actualmente no permite cerrar el diálogo.
----
+
+#### Master 8
+- Funcional transmicion y compresion de datos - Pasa a mayuscula y qr - finalizar lote
+- TODO: cerrar boton de TIMEOUT
+
+
+### ==========================================
 ## Slave
 El cliente Slave está diseñado para ser ejecutado en un PC portátil, y su propósito es recibir y procesar los datos enviados desde el servidor Master.
 ### Funcionalidades Implementadas:
@@ -49,7 +55,14 @@ El cliente Slave está diseñado para ser ejecutado en un PC portátil, y su pro
 - Se estabilizo con pyzbar -> version de yolo mas funcional falta integrar  slave_21 con slave_12 solo funcion detectar
 -# IMPORTANTE! Mejorar la impresion de los datos del qr - utilizar id para armarlo sino duplicidad de lota
 
+#### fusion_2 ->
+- Funcional -> Iniciar - Detener Servidor
+-           -> Ver Qr y mostrar si esta en la base de datos
+-           -> TODO: Imprelentar Destruccion de chaleco
 
+#### fusion_3 ->
+
+### ==========================================
 ### Ejemplo de Activación del Entorno Virtual
 
 Para activar el entorno virtual del proyecto:
