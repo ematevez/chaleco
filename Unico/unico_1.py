@@ -962,25 +962,11 @@ class ChalecoApp(App):
             destruccion_thread.start()
 
     def is_qr_in_database(self, qr_value):
-        print("====================")
         print(qr_value)
-        print("===================")
         qr_parts = qr_value.split(", ")
-        print("====================")
-        print(qr_parts)
-        print("===================")
         qr_id = qr_parts[0].split(": ")[1]
-        print("====================")
-        print(qr_id)
-        print("===================")
         qr_lote = qr_parts[1].split(": ")[1]
-        print("====================")
-        print(qr_lote)
-        print("===================")
         qr_serie = qr_parts[2].split(": ")[1]
-        print("====================")
-        print(qr_serie)
-        print("===================")
         
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM chalecos_receptora WHERE id = ? AND lote = ? AND numero_serie = ?", (qr_id, qr_lote, qr_serie))
@@ -1050,8 +1036,6 @@ class ScanManager:
         except BarcodeReaderError as e:
             print(e)
             return None
-
-
 
 if __name__ == '__main__':
     ChalecoApp().run()
