@@ -2,18 +2,19 @@ import tempfile
 import os
 import base64
 import json
-import datetime
 import random
 import socket
 import sqlite3
 import qrcode
+from datetime import datetime
+ 
 
 import cv2
 import threading
 import time
 
 from dbr import BarcodeReader
-from datetime import datetime
+
 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -36,88 +37,13 @@ from io import BytesIO
 from dateutil import parser
 from reportlab.lib.pagesizes import letter
 
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
-from cryptography.fernet import Fernet
+from reportlab.lib.pagesizes import A4 ,legal  # Para tamaño legal (215.9 x 355.6 mm)
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.platypus import Image
 
 
-def cargar_clave():
-    # Contraseña almacenada en el código (menos seguro)
-    password = b'I9O0OKFRGYHJ4EP9AJIK7MA3J'
-        
-    with open('encryption_key.key', 'rb') as key_file:
-        salt = key_file.readline().strip()
-        encrypted_key = key_file.readline().strip()
 
-    # Derivar la clave a partir de la contraseña y la sal
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100000,
-        backend=default_backend()
-    )
-    key_encrypted = base64.urlsafe_b64encode(kdf.derive(password))
-
-    # Usar la clave derivada para descifrar la clave Fernet
-    fernet = Fernet(key_encrypted)
-    key = fernet.decrypt(encrypted_key)
-    
-    return Fernet(key)
-
-# Cargar la clave de encriptación
-fernet = cargar_clave()
-
-class DatePicker(BoxLayout):
-    def __init__(self, on_select, **kwargs):
-        super().__init__(orientation='vertical', **kwargs)
-        self.on_select = on_select
-
-        self.spinner_year = Spinner(
-            text='Año',
-            values=[str(year) for year in range(1999, 2030)],
-            size_hint=(1, None),
-            height=40
-        )
-        self.spinner_month = Spinner(
-            text='Mes',
-            values=[str(month).zfill(2) for month in range(1, 13)],
-            size_hint=(1, None),
-            height=40
-        )
-        self.spinner_day = Spinner(
-            text='Día',
-            values=[str(day).zfill(2) for day in range(1, 32)],
-            size_hint=(1, None),
-            height=40
-        )
-
-        self.add_widget(self.spinner_year)
-        self.add_widget(self.spinner_month)
-        self.add_widget(self.spinner_day)
-
-        btn_confirm = Button(text='Confirmar', size_hint=(1, None), height=44)
-        btn_confirm.bind(on_press=self.confirm)
-        self.add_widget(btn_confirm)
-
-    def confirm(self, instance):
-        year = self.spinner_year.text
-        month = self.spinner_month.text
-        day = self.spinner_day.text
-        if year != 'Año' and month != 'Mes' and day != 'Día':
-            fecha = f"{year}-{month}-{day}"
-            self.on_select(fecha)
-            self.parent.dismiss()
-        else:
-            # Mostrar mensaje de error o manejar selección incompleta
-            popup = Popup(
-                title='Error',
-                content=Label(text='Debe seleccionar Año, Mes y Día.'),
-                size_hint=(None, None),
-                size=(400, 200)
-            )
-            popup.open()
 
 class ChalecoApp(App):
     
@@ -173,7 +99,7 @@ class ChalecoApp(App):
     def create_db(self):
         cursor = self.conn.cursor()
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS chalecos (
+            CREATE TABLE IF NOT EXISTS chalecos_receptora (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Campo id como PRIMARY KEY
                 lote TEXT,
                 numero_serie TEXT,
@@ -225,11 +151,27 @@ class ChalecoApp(App):
 
         # Crear otros botones
         self.comenzar_lote_button = Button(text='Comenzar Lote')
+        self.comenzar_lote_button.bind(on_press=self.comenzar_lote) 
         self.add_chaleco_button = Button(text='Agregar Chaleco', disabled=True)
+        self.add_chaleco_button.bind(on_press=self.agregar_chaleco)
         self.finalizar_lote_button = Button(text='Finalizar Lote', disabled=True)
+        self.finalizar_lote_button.bind(on_press=self.finalizar_lote)
         self.ver_registro_button = Button(text='Ver Registro')
-        self.transmitir_wifi_button = Button(text='Transmitir WiFi')
+        self.ver_registro_button.bind(on_press=self.ver_registro)
+        self.transmitir_wifi_button = Button(text='Transmitir WiFi', disabled=True)
+        #self.transmitir_wifi_button.bind(on_press=self.transmitir_wifi) Anulado por cambio de funcion
+        
+         # Botón para generar informes
+        self.generar_informe_button = Button(text='Generar Informe', size_hint=(1, None), height=50)
+        self.generar_informe_button.bind(on_press=self.generar_informe)
+        self.root.add_widget(self.generar_informe_button)
 
+        # Botón secreto (no visible al inicio)
+        self.boton_secreto = Button(text='', size_hint=(None, None), size=(0, 0), opacity=0)  # Oculto inicialmente
+        self.boton_secreto.bind(on_press=self.accion_secreta)
+        self.root.add_widget(self.boton_secreto)
+        
+        
         # Añadir los widgets a la interfaz
         self.root.add_widget(self.lote_input)
         self.root.add_widget(self.numero_serie_input)
@@ -272,6 +214,14 @@ class ChalecoApp(App):
         self.popup_clave = Popup(title='Ingresar clave', content=popup_content, size_hint=(0.6, 0.4))
         self.popup_clave.open()
 
+    def mostrar_boton_secreto(self):
+        # Mostrar el botón secreto
+        self.boton_secreto.size_hint = (None, None)
+        self.boton_secreto.size = (150, 50)  # Ajustar el tamaño del botón
+        self.boton_secreto.text = "Botón Secreto"
+        self.boton_secreto.opacity = 1  # Hacer el botón visible
+        self.boton_secreto.disabled = False  # Asegurarse de que esté habilitado
+
     # Función para verificar la clave
     def verificar_clave(self, clave_ingresada):
         if clave_ingresada == '31521775':
@@ -300,15 +250,127 @@ class ChalecoApp(App):
         self.popup_ip.dismiss()  # Cerrar el popup de configuración
         self.mostrar_popup('Éxito', f'IP actualizada a {nueva_ip}')
 
+    def generar_informe(self, instance):
+        # Generar el PDF del informe de destrucción de chalecos
+        pdf_path = self.crear_pdf_informe_destruccion()
+
+        if pdf_path:
+            self.mostrar_popup('Informe Generado', f'El informe ha sido generado en: {pdf_path}')
+        else:
+            self.mostrar_popup('Error', 'No se pudo generar el informe.')
+
+    def crear_pdf_informe_destruccion(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, lote, numero_serie, fabricante, tipo_modelo, fecha_fabricacion, fecha_vencimiento FROM chalecos_receptora WHERE destruido = 1 AND informe = 0")
+        chalecos = cursor.fetchall()
+
+        if not chalecos:
+            self.mostrar_popup('Error', 'No hay chalecos destruidos para generar el informe.')
+            return
+
+        # Crear archivo PDF
+        fecha_actual = datetime.now().strftime("%Y%m%d")
+        pdf_path = os.path.join(os.getcwd(), f"informe_{fecha_actual}.pdf")
+        
+        # Configuración horizontal de página legal
+        c = canvas.Canvas(pdf_path, pagesize=(legal[1], legal[0]))  # Horizontal legal
+        width, height = legal[1], legal[0]  # Ancho y alto en horizontal
+
+        def encabezado_pagina():
+            y_position = height - 30  # Subir más el título para alinearlo con la parte superior
+
+            # Logo (bajado un poco)
+            logo_path = "Logo.png"
+            if os.path.exists(logo_path):
+                c.drawImage(logo_path, 30, y_position - 40, width=70, height=40)  # Bajado más abajo
+
+            # Título (subido más)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawCentredString(width / 2, y_position - 10, "INFORME DE DESTRUCCIÓN DE CHALECOS")
+
+            # Fecha
+            c.setFont("Helvetica", 10)
+            c.drawRightString(width - 30, y_position - 30, f"Fecha: {datetime.now().strftime('%Y-%m-%d')}")
+
+            # Línea separadora
+            c.line(30, y_position - 40, width - 30, y_position - 40)
+
+            # Encabezados de tabla (alineados mejor)
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(30, y_position - 60, "Lote")
+            c.drawString(110, y_position - 60, "Número de Serie")  # Alineación ajustada
+            c.drawString(220, y_position - 60, "Fabricante")
+            c.drawString(350, y_position - 60, "Modelo")
+            c.drawString(460, y_position - 60, "Fecha Fab.")
+            c.drawString(570, y_position - 60, "Fecha Venc.")
+            c.drawString(680, y_position - 60, "Registro Imagen")
+            c.drawString(800, y_position - 60, "Observaciones")
+
+            return y_position - 70
+
+        def agregar_registro(chaleco, y_position):
+            c.setFont("Helvetica", 10)
+            c.drawString(30, y_position - 20, chaleco[1])  # Lote
+            c.drawString(110, y_position - 20, chaleco[2])  # Número de serie (ajustado)
+            c.drawString(220, y_position - 20, chaleco[3])  # Fabricante
+            c.drawString(350, y_position - 20, chaleco[4])  # Modelo
+            c.drawString(460, y_position - 20, chaleco[5])  # Fecha Fab.
+            c.drawString(570, y_position - 20, chaleco[6])  # Fecha Venc.
+
+            # Espacio para las imágenes
+            entrada_image = f"{chaleco[0]}_ENTRADA.png"
+            salida_image = f"{chaleco[0]}_SALIDA.png"
+
+            if os.path.exists(entrada_image):
+                c.drawImage(entrada_image, 680, y_position - 50, width=50, height=50)  # Imagen de entrada
+
+            if os.path.exists(salida_image):
+                c.drawImage(salida_image, 740, y_position - 50, width=50, height=50)  # Imagen de salida
+
+            # Observaciones debajo de las imágenes
+            c.drawString(820, y_position - 10, "Obs.:")  
+
+            return y_position - 70  # Ajuste de espacio entre registros
+
+        # Paginación y contenido
+        registros_por_pagina = 6
+        registros_contados = 0
+        y_position = encabezado_pagina()
+
+        for chaleco in chalecos:
+            if registros_contados and registros_contados % registros_por_pagina == 0:
+                c.showPage()
+                y_position = encabezado_pagina()
+
+            y_position = agregar_registro(chaleco, y_position)
+            registros_contados += 1
+
+        # Espacio para firmas (3 firmas)
+        c.setFont("Helvetica-Bold", 10)
+        y_firma = 100
+        c.drawString(100, y_firma, "____________________________")
+        c.drawString(350, y_firma, "____________________________")
+        c.drawString(600, y_firma, "____________________________")
+        c.drawString(100, y_firma - 20, "Firma 1")
+        c.drawString(350, y_firma - 20, "Firma 2")
+        c.drawString(600, y_firma - 20, "Firma 3")
+
+        c.save()
+
+        # Marcar chalecos como "informe generado"
+        cursor.execute("UPDATE chalecos_receptora SET informe = 1 WHERE destruido = 1 AND informe = 0")
+        self.conn.commit()
+
+        return pdf_path
 
 
 # Validar que la fecha de vencimiento sea mayor a la fecha de fabricación
     def validar_orden_fechas(self):
         """Valida que la fecha de vencimiento sea mayor que la de fabricación"""
         try:
-            # Asegúrate de usar datetime.datetime.strptime, no datetime.strptime
-            fecha_fabricacion = datetime.datetime.strptime(self.fecha_fabricacion_input.text, '%Y-%m-%d')
-            fecha_vencimiento = datetime.datetime.strptime(self.fecha_vencimiento_input.text, '%Y-%m-%d')
+            # Use datetime.strptime since we imported datetime directly from datetime
+            fecha_fabricacion = datetime.strptime(self.fecha_fabricacion_input.text, '%Y-%m-%d')
+            fecha_vencimiento = datetime.strptime(self.fecha_vencimiento_input.text, '%Y-%m-%d')
             
             # La fecha de vencimiento debe ser mayor a la de fabricación
             if fecha_vencimiento > fecha_fabricacion:
@@ -319,19 +381,23 @@ class ChalecoApp(App):
             # Manejo de error en caso de que el formato de fecha sea incorrecto
             self.mostrar_popup('Error', 'Formato de fecha incorrecto. Use YYYY-MM-DD')
             return False
+    
+    def accion_secreta(self, instance):
+        # Aquí defines qué quieres que haga el botón secreto
+        self.mostrar_popup('Acción Secreta', '¡Has activado el botón secreto!')
 
 
     # Función para verificar duplicados
     def verificar_lote_existente(self, lote):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM chalecos WHERE lote=?", (lote,))
+        cursor.execute("SELECT COUNT(*) FROM chalecos_receptora WHERE lote=?", (lote,))
         count = cursor.fetchone()[0]
         return count > 0
     
     # Modificar la función comenzar_lote para evitar duplicados
     def comenzar_lote(self, instance):
         lote_id = random.randint(1000, 9999)
-        fecha_actual = datetime.datetime.now().strftime("%Y%m%d")
+        fecha_actual = datetime.now().strftime("%Y%m%d")
         lote_numero = f"L{lote_id}-{fecha_actual}"
         
         # Verificar si el lote ya existe
@@ -343,7 +409,7 @@ class ChalecoApp(App):
 
         self.add_chaleco_button.disabled = False
         self.finalizar_lote_button.disabled = False
-        self.transmitir_wifi_button.disabled = False
+        # self.transmitir_wifi_button.disabled = False
         self.comenzar_lote_button.disabled = True
 
         self.mostrar_popup('Lote Comenzado', f'Se ha comenzado el lote: {lote_numero}')
@@ -400,7 +466,7 @@ class ChalecoApp(App):
 
         cursor = self.conn.cursor()
         cursor.execute('''
-            INSERT INTO chalecos (lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia)
+            INSERT INTO chalecos_receptora (lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (lote, numero_serie, fabricante, fecha_fabricacion, fecha_vencimiento, tipo_modelo, peso, talla, procedencia))
         self.conn.commit()
@@ -412,7 +478,7 @@ class ChalecoApp(App):
         # Extraer los datos del chaleco desde la base de datos utilizando el ID
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT id, lote, numero_serie  FROM chalecos  WHERE id = ?
+            SELECT id, lote, numero_serie  FROM chalecos_receptora  WHERE id = ?
         ''', (chaleco_id,))  # Ahora se busca por ID
         chaleco = cursor.fetchone()
 
@@ -457,7 +523,13 @@ class ChalecoApp(App):
         else:
             self.mostrar_popup('Error', 'No se encontró el chaleco en la base de datos.')
 
-            
+    def activar_boton_secreto(self, *args):
+        # Detectar un clic en la esquina superior izquierda de la pantalla
+        posicion = Window.mouse_pos
+        if posicion[0] < 50 and posicion[1] > (Window.height - 50):
+            # Solicitar clave cuando se haga clic en la esquina
+            self.solicitar_clave(None)  # Llama a la función que solicita la clave
+      
 
     def crear_pdf_qr(self, qr_image_data, lote):
         # Crear un archivo temporal para el PDF
@@ -494,13 +566,14 @@ class ChalecoApp(App):
         try:
             cursor = self.conn.cursor()
             cursor.execute('''
-                UPDATE chalecos SET qr_image = ? WHERE id = ?
+                UPDATE chalecos_receptora SET qr_image = ? WHERE id = ?
             ''', (sqlite3.Binary(qr_bytes), chaleco_id))  # Usar el id del chaleco para actualizar el registro
             self.conn.commit()
             print(f"QR guardado en la base de datos para chaleco ID: {chaleco_id}")
         except Exception as e:
             print(f"Error al guardar el QR para el chaleco ID {chaleco_id}: {e}")
 
+        
     def imprimir_qr(self, qr_image_data, popup):
         # Obtener el número de lote para el nombre del archivo PDF
         lote = self.lote_input.text
@@ -508,16 +581,16 @@ class ChalecoApp(App):
         # Generar el PDF con el QR
         pdf_path = self.crear_pdf_qr(qr_image_data, lote)
         
-        # Intentar abrir el PDF para imprimir (dependiendo del sistema operativo)
+        # Intentar abrir el PDF (para que el usuario lo imprima manualmente)
         try:
             if os.name == 'nt':  # Windows
-                os.startfile(pdf_path, "print")
+                os.startfile(pdf_path)  # This will open the file, and the user can print from there
             elif os.name == 'posix':  # Linux/Mac
-                os.system(f"lpr {pdf_path}")
+                os.system(f"open {pdf_path}")
             else:
                 self.mostrar_popup('Error', 'No se pudo abrir el archivo para imprimir.')
         except Exception as e:
-            self.mostrar_popup('Error', f'Error al intentar imprimir: {str(e)}')
+            self.mostrar_popup('Error', f'Error al intentar abrir el archivo: {str(e)}')
 
         # Cerrar el popup de éxito
         popup.dismiss()
@@ -534,7 +607,7 @@ class ChalecoApp(App):
 
         # Obtener todos los chalecos del lote actual
         cursor = self.conn.cursor()
-        cursor.execute("SELECT id FROM chalecos WHERE lote = ?", (lote_actual,))
+        cursor.execute("SELECT id FROM chalecos_receptora WHERE lote = ?", (lote_actual,))
         chalecos = cursor.fetchall()
 
         # Generar un QR para cada chaleco del lote
@@ -543,7 +616,19 @@ class ChalecoApp(App):
                 chaleco_id = chaleco[0]
                 self.generar_qr(chaleco_id)
 
-            self.mostrar_popup('Lote Finalizado', 'El lote ha sido finalizado y los chalecos han sido registrados.')
+               # Create a popup with a close button
+                layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
+                layout.add_widget(Label(text='El lote ha sido finalizado y los chalecos han sido registrados.'))
+                
+                # Create a close button for the popup
+                btn_cerrar = Button(text='Cerrar', size_hint=(1, 0.2))
+                layout.add_widget(btn_cerrar)
+
+                popup = Popup(title='Lote Finalizado', content=layout, size_hint=(0.8, 0.4))
+
+                # Bind the button to dismiss the popup
+                btn_cerrar.bind(on_press=popup.dismiss)
+                popup.open()
         else:
             self.mostrar_popup('Error', 'No se encontraron chalecos en este lote.')
 
@@ -587,7 +672,7 @@ class ChalecoApp(App):
         grid_layout.add_widget(titulo_layout)
 
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM chalecos WHERE transmitido=0")
+        cursor.execute("SELECT * FROM chalecos_receptora WHERE transmitido=0")
         registros = cursor.fetchall()
 
         self.checkboxes = []
@@ -671,7 +756,7 @@ class ChalecoApp(App):
         cursor = self.conn.cursor()
         for registro in registros_seleccionados:
             print(f"Marcando transmitido=1 para ID: {registro[0]}, Lote: {registro[1]}")  # Depuración
-            cursor.execute("UPDATE chalecos SET transmitido=1 WHERE id=? AND lote=?", (registro[0], registro[1]))
+            cursor.execute("UPDATE chalecos_receptora SET transmitido=1 WHERE id=? AND lote=?", (registro[0], registro[1]))
         self.conn.commit()
 
     def transmitir_wifi(self, datos):
@@ -725,33 +810,62 @@ class ChalecoApp(App):
         layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
         scroll_view = ScrollView(size_hint=(1, 0.9))
         
-        # GridLayout con 4 columnas para los campos seleccionados
+        # GridLayout with 4 columns for displaying both "Por destruir" and "Destruidos" lists
         grid_layout = GridLayout(cols=4, size_hint_y=None, spacing=10)
         grid_layout.bind(minimum_height=grid_layout.setter('height'))
 
-        # Añadir títulos para cada columna
-        titulos = ["Lote", "Número de Serie", "Fabricante", "Tipo/Modelo"]
-        
-        for titulo in titulos:
-            label = Label(text=titulo, bold=True, size_hint_y=None, height=40, halign='center')
-            label.bind(size=label.setter('text_size'))  # Para centrar el texto
+        # Define a common font size and size_hint_x for all columns to keep them symmetric
+        font_size = '14sp'  # Adjust the font size here
+        column_width = 0.25  # Set size_hint_x to make each column take 25% of the width
+
+        # Title labels for each section
+        titulos_por_destruir = ["Lote (Por Destruir)", "Número de Serie", "Fabricante", "Tipo/Modelo"]
+        titulos_destruidos = ["Lote (Destruidos)", "Número de Serie", "Fabricante", "Tipo/Modelo"]
+
+        # Titles for "Por destruir"
+        for titulo in titulos_por_destruir:
+            label = Label(text=titulo, bold=True, size_hint_y=None, height=40, size_hint_x=column_width, font_size=font_size, halign='center', valign='middle')
+            label.bind(size=label.setter('text_size'))  # Center the text
             grid_layout.add_widget(label)
 
-        # Obtener los registros de la base de datos
+        # Query for "Por destruir" records (destruido = 0)
         cursor = self.conn.cursor()
-        cursor.execute("SELECT lote, numero_serie, fabricante, tipo_modelo FROM chalecos")
-        registros = cursor.fetchall()
+        cursor.execute("SELECT lote, numero_serie, fabricante, tipo_modelo FROM chalecos_receptora WHERE destruido = 0")
+        por_destruir = cursor.fetchall()
 
-        # Añadir cada registro a la tabla
-        for registro in registros:
+        # Add each "Por destruir" record to the grid layout
+        for registro in por_destruir:
             for campo in registro:
-                label = Label(text=str(campo), size_hint_y=None, height=40, halign='center')
-                label.bind(size=label.setter('text_size'))  # Para centrar el texto
+                label = Label(text=str(campo), size_hint_y=None, height=40, size_hint_x=column_width, font_size=font_size, halign='center', valign='middle')
+                label.bind(size=label.setter('text_size'))  # Center the text
+                grid_layout.add_widget(label)
+
+        # Add a spacer to separate the two sections
+        for _ in range(4):  # Add 4 empty labels to keep the columns aligned
+            spacer = Label(text="", size_hint_y=None, height=40, size_hint_x=column_width)
+            grid_layout.add_widget(spacer)
+
+        # Titles for "Destruidos"
+        for titulo in titulos_destruidos:
+            label = Label(text=titulo, bold=True, size_hint_y=None, height=40, size_hint_x=column_width, font_size=font_size, halign='center', valign='middle')
+            label.bind(size=label.setter('text_size'))  # Center the text
+            grid_layout.add_widget(label)
+
+        # Query for "Destruidos" records (destruido = 1)
+        cursor.execute("SELECT lote, numero_serie, fabricante, tipo_modelo FROM chalecos_receptora WHERE destruido = 1")
+        destruidos = cursor.fetchall()
+
+        # Add each "Destruidos" record to the grid layout
+        for registro in destruidos:
+            for campo in registro:
+                label = Label(text=str(campo), size_hint_y=None, height=40, size_hint_x=column_width, font_size=font_size, halign='center', valign='middle')
+                label.bind(size=label.setter('text_size'))  # Center the text
                 grid_layout.add_widget(label)
 
         scroll_view.add_widget(grid_layout)
         layout.add_widget(scroll_view)
 
+        # Close button
         cerrar_button = Button(text='Cerrar', size_hint=(1, 0.1), height=50)
         cerrar_button.bind(on_press=lambda x: self.popup_ver_registro.dismiss())
         layout.add_widget(cerrar_button)
@@ -762,6 +876,8 @@ class ChalecoApp(App):
             size_hint=(0.8, 0.8)
         )
         self.popup_ver_registro.open()
+
+
 
     def on_key_down(self, window, key, *args):
         if key == 273:  # Código de tecla para Flecha arriba
@@ -874,7 +990,88 @@ class ChalecoApp(App):
 
     def set_fecha_vencimiento(self, fecha):
         self.fecha_vencimiento_input.text = fecha
+        
+        
 #!=============================PARTE DE FUSION=======================
+    def verificar_destruccion(self, qr_value):
+        """Simula el proceso de destrucción del chaleco escaneado."""
+        try:
+            # Aquí puedes agregar la lógica de verificación y destrucción
+            print(f"Verificando y destruyendo el chaleco con QR: {qr_value}")
+            
+            # Simular un proceso de destrucción
+            time.sleep(3)  # Esperar 3 segundos para simular el proceso de destrucción
+            
+            # Actualizar la base de datos para marcar el chaleco como destruido
+            qr_parts = qr_value.split(", ")
+            qr_id = qr_parts[0].split(": ")[1]
+            qr_lote = qr_parts[1].split(": ")[1]
+            qr_serie = qr_parts[2].split(": ")[1]
+
+            cursor = self.conn.cursor()
+            cursor.execute("UPDATE chalecos_receptora SET destruido = 1 WHERE id = ? AND lote = ? AND numero_serie = ?", (qr_id, qr_lote, qr_serie))
+            self.conn.commit()
+            
+            # Capturar imagen después de la destrucción y escribir "DESTRUIDO" en rojo y negrita
+            self.capturar_imagen_con_texto(f"{qr_id}_SALIDA.png", qr_id, qr_lote, qr_serie)
+
+
+            # Volver a habilitar el botón de escaneo QR
+            Clock.schedule_once(lambda dt: self.habilitar_boton_escanear_qr(), 0)
+            print(f"Chaleco {qr_id} destruido exitosamente.")
+        except Exception as e:
+            print(f"Error durante la destrucción: {str(e)}")
+
+
+
+    def capturar_imagen_con_texto(self, nombre_archivo, qr_id, qr_lote, qr_serie):
+        cam = cv2.VideoCapture(0)  # Abre la cámara
+
+        if not cam.isOpened():
+            print("Error: No se puede abrir la cámara.")
+            return
+
+        ret, frame = cam.read()
+        if not ret:
+            print("Error al capturar la imagen.")
+            cam.release()
+            return
+
+        frame = cv2.resize(frame, (800, 600))
+        
+        # Formatear el texto a incluir en la imagen
+        fecha_hora_actual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Text details (normal color)
+        texto_normal = f"ID: {qr_id}, Lote: {qr_lote}, Serie: {qr_serie}\nFecha: {fecha_hora_actual}"
+        
+        # "DESTRUIDO" (in red)
+        texto_destruido = "DESTRUIDO"
+        
+        # Escribir el texto normal (ID, Lote, Serie, Fecha) en blanco (or another color)
+        y0, dy = 50, 30  # Starting position for the text
+        color_normal = (255, 255, 255)  # White color for normal text
+        for i, line in enumerate(texto_normal.split('\n')):
+            y = y0 + i * dy
+            cv2.putText(frame, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, color_normal, 2, cv2.LINE_AA)
+        
+        # Escribir el texto "DESTRUIDO" en rojo, debajo del texto normal
+        y_destruido = y0 + len(texto_normal.split('\n')) * dy
+        cv2.putText(frame, texto_destruido, (10, y_destruido), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+
+        # Guardar la imagen con el nombre especificado
+        cv2.imwrite(nombre_archivo, frame)
+        cam.release()
+        cv2.destroyAllWindows()
+
+        print(f"Captura guardada como: {nombre_archivo}")
+
+
+    def habilitar_boton_escanear_qr(self):
+        """Rehabilita el botón de escaneo de QR."""
+        self.scan_qr_button.disabled = False
+        print("Botón de escaneo QR habilitado nuevamente.")
+
+
     def scan_qr(self, instance):
         global qr_last_seen, qr_last_time, qr_timer_started
         cap = cv2.VideoCapture(0)  # Abre la cámara local
@@ -886,8 +1083,9 @@ class ChalecoApp(App):
 
         qr_accumulated_time = 0  # Tiempo acumulado para el QR detectado
         threshold_5_seconds = False  # Indica si ya se cumplió el tiempo de 5 segundos
+        stop_scan = False  # Bandera para detener el escaneo cuando se habilite el botón
 
-        while True:
+        while not stop_scan:
             ret, frame = cap.read()
             if not ret:
                 print("Error al capturar la imagen")
@@ -912,10 +1110,36 @@ class ChalecoApp(App):
                             qr_last_time = time.time()
 
                             if qr_accumulated_time >= 5 and not threshold_5_seconds:
-                                print("QR detectado y estable por 5 segundos. Habilitando botón de destrucción.")
-                                if self.is_qr_in_database(qr_value):
-                                    self.on_destruction_button(None)
-                                    threshold_5_seconds = True
+                                chaleco_existe, esta_destruido = self.is_qr_in_database(qr_value)
+                                if chaleco_existe:
+                                    if esta_destruido:
+                                        # Mostrar mensaje y no habilitar la destrucción
+                                        self.mostrar_popup('Información', 'El chaleco ya está destruido.')
+                                        self.destruction_button.disabled = True  # Deshabilitar el botón de destrucción
+                                        self.scan_qr_button.disabled = False  # Mantener habilitado el botón de escaneo
+
+                                        # Calcular posición para centrar el texto "DESTRUIDO"
+                                        text = "DESTRUIDO"
+                                        font = cv2.FONT_HERSHEY_SIMPLEX
+                                        font_scale = 2
+                                        thickness = 4
+                                        color = (0, 0, 255)  # Rojo
+
+                                        # Obtener las dimensiones de la ventana y del texto
+                                        text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                                        text_x = (frame_with_qr.shape[1] - text_size[0]) // 2  # Centrar horizontalmente
+                                        text_y = (frame_with_qr.shape[0] + text_size[1]) // 2  # Centrar verticalmente
+
+                                        # Mostrar el texto "DESTRUIDO" en el centro de la pantalla
+                                        cv2.putText(frame_with_qr, text, (text_x, text_y), font, font_scale, color, thickness)    
+                                    else:
+                                        print("QR detectado y estable por 5 segundos. Habilitando botón de destrucción.")
+                                        # Habilitar el botón de destrucción
+                                        self.destruction_button.disabled = False  # Habilitar el botón de destrucción
+                                        self.scan_qr_button.disabled = True  # Deshabilitar el botón de escaneo
+                                        cv2.putText(frame_with_qr, "QR válido", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                                        threshold_5_seconds = True
+                                        stop_scan = True  # Detener el escaneo
                                 else:
                                     print("QR no válido, no se habilitará la destrucción.")
                                     threshold_5_seconds = False
@@ -938,21 +1162,51 @@ class ChalecoApp(App):
                 cv2.imshow('QR Scanner', frame_with_qr)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+                stop_scan = True
 
         cap.release()
         cv2.destroyAllWindows()
+    
+    # Definir la función habilitar_boton_destruccion
+    def habilitar_boton_destruccion(self):
+        """Habilita el botón de destrucción y deshabilita el de escanear QR."""
+        self.destruction_button.disabled = False
+        self.scan_qr_button.disabled = True  # Deshabilitar el botón de escaneo de QR
+        print("Botón de destrucción habilitado y botón de escaneo deshabilitado.")
 
+
+    def obtener_datos_chaleco(self, qr_value):
+        # Separar los valores del código QR
+        qr_parts = qr_value.split(", ")
+        qr_id = qr_parts[0].split(": ")[1]
+        qr_lote = qr_parts[1].split(": ")[1]
+        qr_serie = qr_parts[2].split(": ")[1]
+        
+        # Buscar en la base de datos el chaleco correspondiente
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, lote, numero_serie FROM chalecos_receptora WHERE id = ? AND lote = ? AND numero_serie = ?", (qr_id, qr_lote, qr_serie))
+        data = cursor.fetchone()
+
+        # Si los datos existen, devolverlos
+        if data:
+            return data
+        else:
+            print("No se encontró el chaleco en la base de datos.")
+            return None
 
     def on_destruction_button(self, instance):
         global qr_last_seen
         print("Destrucción en proceso...")
         print(f"QR último visto: {qr_last_seen}")
         
+        # Deshabilitar ambos botones cuando comienza el proceso de destrucción
+        self.destruction_button.disabled = True
+        self.scan_qr_button.disabled = True
+
         chaleco_data = self.obtener_datos_chaleco(qr_last_seen)
         if chaleco_data:
             id, lote, numero_serie = chaleco_data
-            nombre_archivo = f"{id}_{lote}_{numero_serie}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
+            nombre_archivo = f"{id}_ENTRADA.png"
             
             # Capturar imagen de la cámara y guardarla
             self.capturar_imagen(nombre_archivo, chaleco_data)
@@ -962,7 +1216,6 @@ class ChalecoApp(App):
             destruccion_thread.start()
 
     def is_qr_in_database(self, qr_value):
-        print(qr_value)
         qr_parts = qr_value.split(", ")
         qr_id = qr_parts[0].split(": ")[1]
         qr_lote = qr_parts[1].split(": ")[1]
@@ -971,8 +1224,9 @@ class ChalecoApp(App):
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM chalecos_receptora WHERE id = ? AND lote = ? AND numero_serie = ?", (qr_id, qr_lote, qr_serie))
         data = cursor.fetchone()
-        print(data)
-        return data is not None
+        
+        # Si el chaleco existe, devolver si está destruido
+        return data is not None, data[12] == 1 if data else False
 
     def capturar_imagen(self, nombre_archivo, chaleco_data):
         id, lote, numero_serie = chaleco_data
