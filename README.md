@@ -81,3 +81,45 @@ https://github.com/ErenKaymakci/Real-Time-QR-Detection-and-Decoding
 
 https://www.dynamsoft.com/customer/license/trialLicenseList (Hasta el 3 de noviembre)
 
+
+
+====================================
+ULTIMO ERROR ANTES DE DORMIR
+====================================
+
+import uuid
+import sys
+
+# Función para obtener la dirección MAC
+def obtener_mac():
+    mac = hex(uuid.getnode()).replace('0x', '').upper()
+    mac = ':'.join(mac[i:i+2] for i in range(0, 12, 2))
+    return mac
+
+# Dirección MAC permitida (modifica con la dirección que necesitas)
+MAC_PERMITIDA = "00:1A:2B:3C:4D:5E"
+
+def verificar_mac():
+    mac_actual = obtener_mac()
+    if mac_actual != MAC_PERMITIDA:
+        print(f"Acceso denegado: esta aplicación solo puede ejecutarse en la máquina con MAC {MAC_PERMITIDA}.")
+        sys.exit()  # Termina la ejecución del programa
+    else:
+        print(f"Acceso permitido: Ejecutando en la máquina con MAC {mac_actual}.")
+
+# Llamar a la función antes de ejecutar el resto del código
+verificar_mac()
+
+# Aquí iría el resto de tu código
+print("El programa continúa...")
+
+
+CODIFICAR MAC Y VERIFICAR EL CODIFICADO DE LA BASE DE DATOS
+
+
+
+###==================================================================
+Ejemplo completo para una aplicación de Kivy:
+Si tu archivo es un script de Kivy y deseas un .exe sin consola y con un ícono personalizado, podrías hacer algo así:
+
+pyinstaller --onefile --windowed --icon=mi_icono.ico mi_aplicacion.py

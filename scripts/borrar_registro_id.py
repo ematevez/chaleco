@@ -23,7 +23,7 @@ def borrar_registro(db_path, id_registro):
     cursor = conn.cursor()
     
     # Eliminar el registro con el ID especificado
-    cursor.execute("DELETE FROM chalecos WHERE id = ?;", (id_registro,))
+    cursor.execute("DELETE FROM chalecos_receptora WHERE id = ?;", (id_registro,))
     
     # Guardar los cambios
     conn.commit()

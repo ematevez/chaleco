@@ -7,14 +7,12 @@ import socket
 import sqlite3
 import qrcode
 from datetime import datetime
- 
 
 import cv2
 import threading
 import time
 
-from dbr import BarcodeReader
-
+from dbr import BarcodeReader, EnumBarcodeFormat, BarcodeReaderError
 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -27,7 +25,6 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
 from kivy.core.window import Window
 from kivy.uix.image import Image as KivyImage
-from kivy.uix.image import Image
 from kivy.core.image import Image as CoreImage
 from kivy.uix.spinner import Spinner
 
@@ -43,7 +40,62 @@ from reportlab.lib import colors
 from reportlab.platypus import Image
 
 
+# Inicializar licencia de Dynamsoft Barcode Reader (DBR)
+# BarcodeReader.init_license(
+#     "DLS2eyJoYW5kc2hha2VDb2RlIjoiMTAzMjc1MDExLVRYbFFjbTlxIiwibWFpblNlcnZlclVSTCI6Imh0dHBzOi8vbWRscy5keW5hbXNvZnRvbmxpbmUuY29tIiwib3JnYW5pemF0aW9uSUQiOiIxMDMyNzUwMTEiLCJzdGFuZGJ5U2VydmVyVVJMIjoiaHR0cHM6Ly9zZGxzLmR5bmFtc29mdG9ubGluZS5jb20iLCJjaGVja0NvZGUiOjE2MTEzODUyMTd9")
 
+# BarcodeReader.init_license(
+#     "t0068lQAAAC5ZvlvNF7LWgYbGw+kqFwzirFByJB5LUXcYUVcCzLGptVtrDlXO+rdeb/Qnqg1l10mgRtVKc2JCgjCqh/j87J4=;t0068lQAAACpyYxOzS8jKY/iSqnk7VGfmuYIsSd7O/2HrVMuJrBmKTgHxBSlWppF2C5SjnogshmCljNJDVHjrMTFMQ5vy/Ho=")
+
+class DatePicker(BoxLayout):
+    def __init__(self, on_select, **kwargs):
+        super().__init__(orientation='vertical', **kwargs)
+        self.on_select = on_select
+
+        self.spinner_year = Spinner(
+            text='Año',
+            values=[str(year) for year in range(1999, 2030)],
+            size_hint=(1, None),
+            height=40
+        )
+        self.spinner_month = Spinner(
+            text='Mes',
+            values=[str(month).zfill(2) for month in range(1, 13)],
+            size_hint=(1, None),
+            height=40
+        )
+        self.spinner_day = Spinner(
+            text='Día',
+            values=[str(day).zfill(2) for day in range(1, 32)],
+            size_hint=(1, None),
+            height=40
+        )
+
+        self.add_widget(self.spinner_year)
+        self.add_widget(self.spinner_month)
+        self.add_widget(self.spinner_day)
+
+        btn_confirm = Button(text='Confirmar', size_hint=(1, None), height=44)
+        btn_confirm.bind(on_press=self.confirm)
+        self.add_widget(btn_confirm)
+
+    def confirm(self, instance):
+        year = self.spinner_year.text
+        month = self.spinner_month.text
+        day = self.spinner_day.text
+        if year != 'Año' and month != 'Mes' and day != 'Día':
+            fecha = f"{year}-{month}-{day}"
+            self.on_select(fecha)
+            self.parent.dismiss()
+        else:
+            # Mostrar mensaje de error o manejar selección incompleta
+            popup = Popup(
+                title='Error',
+                content=Label(text='Debe seleccionar Año, Mes y Día.'),
+                size_hint=(None, None),
+                size=(400, 200)
+            )
+            popup.open()
 
 class ChalecoApp(App):
     
@@ -161,7 +213,7 @@ class ChalecoApp(App):
         self.transmitir_wifi_button = Button(text='Transmitir WiFi', disabled=True)
         #self.transmitir_wifi_button.bind(on_press=self.transmitir_wifi) Anulado por cambio de funcion
         
-         # Botón para generar informes
+        # Botón para generar informes
         self.generar_informe_button = Button(text='Generar Informe', size_hint=(1, None), height=50)
         self.generar_informe_button.bind(on_press=self.generar_informe)
         self.root.add_widget(self.generar_informe_button)
@@ -815,7 +867,7 @@ class ChalecoApp(App):
         grid_layout.bind(minimum_height=grid_layout.setter('height'))
 
         # Define a common font size and size_hint_x for all columns to keep them symmetric
-        font_size = '14sp'  # Adjust the font size here
+        font_size = '8sp'  # Adjust the font size here
         column_width = 0.25  # Set size_hint_x to make each column take 25% of the width
 
         # Title labels for each section
@@ -1214,19 +1266,48 @@ class ChalecoApp(App):
             # Iniciar el proceso de destrucción en un hilo separado
             destruccion_thread = threading.Thread(target=self.verificar_destruccion, args=(qr_last_seen,))
             destruccion_thread.start()
-
+    
     def is_qr_in_database(self, qr_value):
-        qr_parts = qr_value.split(", ")
-        qr_id = qr_parts[0].split(": ")[1]
-        qr_lote = qr_parts[1].split(": ")[1]
-        qr_serie = qr_parts[2].split(": ")[1]
+        try:
+            # Intentar separar el valor del QR por comas y espacios
+            qr_parts = qr_value.split(", ")
+            
+            # Verificar que qr_parts tiene al menos 3 elementos (ID, Lote, Serie)
+            if len(qr_parts) < 3:
+                print(f"Error: QR no tiene suficientes partes. Valor QR: {qr_value}")
+                return False, False  # Devolver False si el formato es incorrecto
+            
+            # Desglosar las partes del QR, asegurándose de que cada parte tiene el formato esperado
+            qr_id = qr_parts[0].split(": ")
+            qr_lote = qr_parts[1].split(": ")
+            qr_serie = qr_parts[2].split(": ")
+
+            # Verificar que cada campo tiene al menos dos partes (clave y valor)
+            if len(qr_id) < 2 or len(qr_lote) < 2 or len(qr_serie) < 2:
+                print(f"Error: Formato incorrecto en alguna parte del QR. Valor QR: {qr_value}")
+                return False, False
+            
+            # Obtener los valores reales
+            qr_id = qr_id[1]
+            qr_lote = qr_lote[1]
+            qr_serie = qr_serie[1]
+
+            # Buscar en la base de datos
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM chalecos_receptora WHERE id = ? AND lote = ? AND numero_serie = ?", 
+                        (qr_id, qr_lote, qr_serie))
+            data = cursor.fetchone()
+
+            # Si el chaleco existe, devolver si está destruido
+            return data is not None, data[12] == 1 if data else False
         
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM chalecos_receptora WHERE id = ? AND lote = ? AND numero_serie = ?", (qr_id, qr_lote, qr_serie))
-        data = cursor.fetchone()
-        
-        # Si el chaleco existe, devolver si está destruido
-        return data is not None, data[12] == 1 if data else False
+        except IndexError:
+            print(f"Error de índice: Formato del QR no es válido. Valor QR: {qr_value}")
+            return False, False  # Devolver False si el formato es incorrecto
+        except Exception as e:
+            print(f"Error al verificar el QR en la base de datos: {e}")
+            return False, False
+
 
     def capturar_imagen(self, nombre_archivo, chaleco_data):
         id, lote, numero_serie = chaleco_data
@@ -1249,9 +1330,6 @@ class ChalecoApp(App):
         cv2.imwrite(nombre_archivo, frame)
         cam.release()
         cv2.destroyAllWindows()
-
-from dbr import BarcodeReader, EnumBarcodeFormat, BarcodeReaderError
-import cv2
 
 class ScanManager:
     def __init__(self):

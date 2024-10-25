@@ -11,7 +11,7 @@ conn = sqlite3.connect('chalecos.db')
 cursor = conn.cursor()
 
 # Consultar los datos de los chalecos junto con la imagen QR almacenada
-cursor.execute('SELECT numero_serie, fabricante, lote, qr_image FROM chalecos')  # Incluye la columna con el QR
+cursor.execute('SELECT numero_serie, fabricante, lote, qr_image FROM chalecos_receptora')  # Incluye la columna con el QR
 chalecos = cursor.fetchall()
 
 # Crear una clase para generar el PDF
