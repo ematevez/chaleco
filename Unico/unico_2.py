@@ -128,46 +128,48 @@ class ChalecoApp(App):
             return '127.0.0.1'  # Devuelve localhost si ocurre algún error
 
     def build(self):
-        # Configurar la ventana en pantalla completa
-        # Window.fullscreen = True  # Puedes usar 'auto' o True
+        # Conectar a la base de datos y crear la tabla si no existe
         self.conn = sqlite3.connect('chalecos.db', check_same_thread=False)
         self.create_db()
+        
+        # Configurar la ventana principal de la interfaz
         self.root = BoxLayout(orientation='vertical', padding=10, spacing=10)
         self.create_widgets()
 
-        # IP por defecto para transmitir WiFi
-        # self.ip_destino = '192.168.1.33'  # Esta es la IP inicial por defecto
-        
         # Obtener la IP local automáticamente
-        self.ip_destino = self.obtener_ip_local()  # IP automáticamente asignada
+        self.ip_destino = self.obtener_ip_local()  # IP asignada automáticamente
         print(f"IP local detectada: {self.ip_destino}")
-        
-        # Habilitar el uso de las teclas de flecha para moverse entre los campos de texto
+
+        # Bloquear los campos de entrada al iniciar la aplicación
+        self.cambiar_estado_campos(True)
+
+        # Ajuste del foco en los campos de texto
         Window.bind(on_key_down=self.on_key_down)
         
         return self.root
+
 
     # Añadir columna qr_imagen en la tabla si no existe
     def create_db(self):
         cursor = self.conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS chalecos_receptora (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Campo id como PRIMARY KEY
-                lote TEXT,
-                numero_serie TEXT,
-                fabricante TEXT,
-                fecha_fabricacion TEXT,
-                fecha_vencimiento TEXT,
-                tipo_modelo TEXT,
-                peso TEXT,
-                talla TEXT,
-                procedencia TEXT,
-                qr_image BLOB,  
-                fecha_destruccion TEXT, 
-                transmitido INTEGER DEFAULT 0,
-                destruido INTEGER DEFAULT 0,
-                informe INTEGER DEFAULT 0
-            )
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lote TEXT,
+                    numero_serie TEXT,
+                    fabricante TEXT,
+                    fecha_fabricacion TEXT,
+                    fecha_vencimiento TEXT,
+                    tipo_modelo TEXT,
+                    peso TEXT,
+                    talla TEXT,
+                    procedencia TEXT,
+                    qr_image BLOB,
+                    transmitido INTEGER DEFAULT 0,
+                    destruido INTEGER DEFAULT 0,
+                    informe INTEGER DEFAULT 0,
+                    fecha_destrido TEXT
+                )
         ''')
         self.conn.commit()
 
@@ -357,14 +359,14 @@ class ChalecoApp(App):
             c.drawString(570, y_position - 20, chaleco[6])  # Fecha Venc.
 
             # Espacio para las imágenes
-            entrada_image = f"{chaleco[0]}_ENTRADA.png"
-            salida_image = f"{chaleco[0]}_SALIDA.png"
+            # entrada_image = f"{chaleco[0]}_ENTRADA.png"
+            # salida_image = f"{chaleco[0]}_SALIDA.png"
 
-            if os.path.exists(entrada_image):
-                c.drawImage(entrada_image, 680, y_position - 50, width=50, height=50)  # Imagen de entrada
+            # if os.path.exists(entrada_image):
+            #     c.drawImage(entrada_image, 680, y_position - 50, width=50, height=50)  # Imagen de entrada
 
-            if os.path.exists(salida_image):
-                c.drawImage(salida_image, 740, y_position - 50, width=50, height=50)  # Imagen de salida
+            # if os.path.exists(salida_image):
+            #     c.drawImage(salida_image, 740, y_position - 50, width=50, height=50)  # Imagen de salida
 
             # Observaciones debajo de las imágenes
             c.drawString(820, y_position - 10, "Obs.:")  
@@ -385,14 +387,14 @@ class ChalecoApp(App):
             registros_contados += 1
 
         # Espacio para firmas (3 firmas)
-        c.setFont("Helvetica-Bold", 10)
-        y_firma = 100
-        c.drawString(100, y_firma, "____________________________")
-        c.drawString(350, y_firma, "____________________________")
-        c.drawString(600, y_firma, "____________________________")
-        c.drawString(100, y_firma - 20, "Firma 1")
-        c.drawString(350, y_firma - 20, "Firma 2")
-        c.drawString(600, y_firma - 20, "Firma 3")
+        # c.setFont("Helvetica-Bold", 10)
+        # y_firma = 100
+        # c.drawString(100, y_firma, "____________________________")
+        # c.drawString(350, y_firma, "____________________________")
+        # c.drawString(600, y_firma, "____________________________")
+        # c.drawString(100, y_firma - 20, "Firma 1")
+        # c.drawString(350, y_firma - 20, "Firma 2")
+        # c.drawString(600, y_firma - 20, "Firma 3")
 
         c.save()
 
@@ -446,9 +448,10 @@ class ChalecoApp(App):
         
         self.lote_input.text = lote_numero
 
+        # Desbloquear los campos y ajustar botones
+        self.cambiar_estado_campos(False)
         self.add_chaleco_button.disabled = False
         self.finalizar_lote_button.disabled = False
-        # self.transmitir_wifi_button.disabled = False
         self.comenzar_lote_button.disabled = True
 
         self.mostrar_popup('Lote Comenzado', f'Se ha comenzado el lote: {lote_numero}')
@@ -655,38 +658,27 @@ class ChalecoApp(App):
                 chaleco_id = chaleco[0]
                 self.generar_qr(chaleco_id)
 
-               # Create a popup with a close button
-                layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-                layout.add_widget(Label(text='El lote ha sido finalizado y los chalecos han sido registrados.'))
-                
-                # Create a close button for the popup
-                btn_cerrar = Button(text='Cerrar', size_hint=(1, 0.2))
-                layout.add_widget(btn_cerrar)
+            layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
+            layout.add_widget(Label(text='El lote ha sido finalizado y los chalecos han sido registrados.'))
+            
+            btn_cerrar = Button(text='Cerrar', size_hint=(1, 0.2))
+            layout.add_widget(btn_cerrar)
 
-                popup = Popup(title='Lote Finalizado', content=layout, size_hint=(0.8, 0.4))
-
-                # Bind the button to dismiss the popup
-                btn_cerrar.bind(on_press=popup.dismiss)
-                popup.open()
+            popup = Popup(title='Lote Finalizado', content=layout, size_hint=(0.8, 0.4))
+            btn_cerrar.bind(on_press=popup.dismiss)
+            popup.open()
         else:
             self.mostrar_popup('Error', 'No se encontraron chalecos en este lote.')
 
-        # Finalizar el lote
-        # Guardar el chaleco y obtener su ID
-        chaleco_id = self.guardar_chaleco()
-            
-        # DEBUG: Verifica que chaleco_id es diferente para cada chaleco
-        print(f"Generando QR para chaleco ID: {chaleco_id}")
-
-        # Generar QR con la información del chaleco
-        self.generar_qr(chaleco_id)  # Ahora se pasa el ID como argumento
-        # Limpiar los campos de entrada
+        # Limpiar los campos de entrada y bloquearlos
         self.limpiar_campos()
+        self.cambiar_estado_campos(True)
         
-    
+        # Restablecer los botones
         self.add_chaleco_button.disabled = True
         self.finalizar_lote_button.disabled = True
         self.comenzar_lote_button.disabled = False
+
 
         
     
@@ -1037,25 +1029,30 @@ class ChalecoApp(App):
         try:
             print(f"Verificando y destruyendo el chaleco con QR: {qr_value}")
             
-            # Actualizar la base de datos para marcar el chaleco como destruido
+            # Extraer los datos del QR
             qr_parts = qr_value.split(", ")
             qr_id = qr_parts[0].split(": ")[1]
             qr_lote = qr_parts[1].split(": ")[1]
             qr_serie = qr_parts[2].split(": ")[1]
 
-            # Obtener la fecha y hora actual
+            # Obtener la fecha y hora actual para la destrucción
             fecha_destruccion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+            # Actualizar la base de datos con la fecha de destrucción
             cursor = self.conn.cursor()
-            cursor.execute("UPDATE chalecos_receptora SET destruido = 1, fecha_destruccion = ? WHERE id = ? AND lote = ? AND numero_serie = ?", (fecha_destruccion, qr_id, qr_lote, qr_serie))
+            cursor.execute(
+                "UPDATE chalecos_receptora SET destruido = 1, fecha_destruccion = ? WHERE id = ? AND lote = ? AND numero_serie = ?",
+                (fecha_destruccion, qr_id, qr_lote, qr_serie)
+            )
             self.conn.commit()
 
-            # Capturar imagen después de la destrucción y escribir "DESTRUIDO" en rojo
+            # Capturar imagen de salida con el texto "DESTRUIDO"
             self.capturar_imagen_con_texto(f"{qr_id}_SALIDA.png", qr_id, qr_lote, qr_serie)
 
             print(f"Chaleco {qr_id} destruido exitosamente.")
         except Exception as e:
             print(f"Error durante la destrucción: {str(e)}")
+
 
 
 
@@ -1075,31 +1072,41 @@ class ChalecoApp(App):
 
         frame = cv2.resize(frame, (800, 600))
         
-        # Formatear el texto a incluir en la imagen
+        # Formatear el texto
         fecha_hora_actual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        # Text details (normal color)
         texto_normal = f"ID: {qr_id}, Lote: {qr_lote}, Serie: {qr_serie}\nFecha: {fecha_hora_actual}"
-        
-        # "DESTRUIDO" (in red)
         texto_destruido = "DESTRUIDO"
         
-        # Escribir el texto normal (ID, Lote, Serie, Fecha) en blanco (or another color)
-        y0, dy = 50, 30  # Starting position for the text
-        color_normal = (255, 255, 255)  # White color for normal text
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE chalecos_receptora SET fecha_destruccion = ? WHERE id = ?", (fecha_hora_actual, id))
+        self.conn.commit()
+        
+        
+        # Escribir el texto
+        y0, dy = 50, 30
+        color_normal = (255, 255, 255)
         for i, line in enumerate(texto_normal.split('\n')):
             y = y0 + i * dy
             cv2.putText(frame, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, color_normal, 2, cv2.LINE_AA)
         
-        # Escribir el texto "DESTRUIDO" en rojo, debajo del texto normal
         y_destruido = y0 + len(texto_normal.split('\n')) * dy
         cv2.putText(frame, texto_destruido, (10, y_destruido), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
 
-        # Guardar la imagen con el nombre especificado
+        # Guardar la imagen
         cv2.imwrite(nombre_archivo, frame)
         cam.release()
         cv2.destroyAllWindows()
 
-        print(f"Captura guardada como: {nombre_archivo}")
+    def cambiar_estado_campos(self, estado):
+        """Bloquea o desbloquea los campos de entrada."""
+        self.numero_serie_input.disabled = estado
+        self.fabricante_input.disabled = estado
+        self.fecha_fabricacion_input.disabled = estado
+        self.fecha_vencimiento_input.disabled = estado
+        self.tipo_modelo_input.disabled = estado
+        self.peso_input.disabled = estado
+        self.talla_spinner.disabled = estado
+        self.procedencia_input.disabled = estado
 
 
     def habilitar_boton_escanear_qr(self):
