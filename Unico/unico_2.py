@@ -98,6 +98,9 @@ class DatePicker(BoxLayout):
             popup.open()
 
 class ChalecoApp(App):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.qr_last_seen = None  # Define qr_last_seen como atributo de la clase
     
     def obtener_ip_local(self):
         """Obtiene la IP local de la máquina en la red."""
@@ -147,7 +150,6 @@ class ChalecoApp(App):
         Window.bind(on_key_down=self.on_key_down)
         
         return self.root
-
 
     # Añadir columna qr_imagen en la tabla si no existe
     def create_db(self):
@@ -571,7 +573,6 @@ class ChalecoApp(App):
         if posicion[0] < 50 and posicion[1] > (Window.height - 50):
             # Solicitar clave cuando se haga clic en la esquina
             self.solicitar_clave(None)  # Llama a la función que solicita la clave
-      
 
     def crear_pdf_qr(self, qr_image_data, lote):
         # Crear un archivo temporal para el PDF
@@ -589,7 +590,6 @@ class ChalecoApp(App):
         qr_temp_path = os.path.join(tempfile.gettempdir(), f"qr_{lote}.png")
         with open(qr_temp_path, 'wb') as f:
             f.write(qr_image_data.getvalue())
-
         
         # Colocar la imagen en el PDF
         c.drawImage(qr_temp_path, 200, height - 300, 150, 150)
@@ -637,7 +637,6 @@ class ChalecoApp(App):
         # Cerrar el popup de éxito
         popup.dismiss()
 
-
     def finalizar_lote(self, instance):
         # Obtener el lote actual
         lote_actual = self.lote_input.text
@@ -680,7 +679,16 @@ class ChalecoApp(App):
         self.comenzar_lote_button.disabled = False
 
 
-        
+    def cambiar_estado_campos(self, estado):
+        """Bloquea o desbloquea los campos de entrada."""
+        self.numero_serie_input.disabled = estado
+        self.fabricante_input.disabled = estado
+        self.fecha_fabricacion_input.disabled = estado
+        self.fecha_vencimiento_input.disabled = estado
+        self.tipo_modelo_input.disabled = estado
+        self.peso_input.disabled = estado
+        self.talla_spinner.disabled = estado
+        self.procedencia_input.disabled = estado    
     
 
     def abrir_pantalla_transmision(self, instance):
@@ -778,10 +786,6 @@ class ChalecoApp(App):
         else:
             # Mostrar mensaje de error si no se seleccionó ningún registro
             self.mostrar_popup('Error', 'No se seleccionaron registros para transmitir')
-
-
-
-
 
     def marcar_registros_como_transmitidos(self, registros_seleccionados):
         cursor = self.conn.cursor()
@@ -951,7 +955,6 @@ class ChalecoApp(App):
                         next_widget.focus = True
                         break  # Salir del bucle cuando encontramos un widget válido
 
-
     def campos_llenos(self):
         return all([
             self.numero_serie_input.text,
@@ -963,9 +966,6 @@ class ChalecoApp(App):
             self.talla_spinner.text,
             self.procedencia_input.text
         ])
-
-
-
 
 # Validar fechas (vencimiento mayor a fabricación)
     def validar_fechas(self):
@@ -1048,14 +1048,35 @@ class ChalecoApp(App):
 
             # Capturar imagen de salida con el texto "DESTRUIDO"
             self.capturar_imagen_con_texto(f"{qr_id}_SALIDA.png", qr_id, qr_lote, qr_serie)
-
+            self.unir_imagenes(qr_id)
             print(f"Chaleco {qr_id} destruido exitosamente.")
         except Exception as e:
             print(f"Error durante la destrucción: {str(e)}")
 
+    def unir_imagenes(self, id_chaleco):
+    # Cargar las imágenes
+        imagen_entrada = cv2.imread(f"{id_chaleco}_ENTRADA.png")
+        imagen_salida = cv2.imread(f"{id_chaleco}_SALIDA.png")
+        
+        if imagen_entrada is None or imagen_salida is None:
+            print("Error: Una de las imágenes no se pudo cargar.")
+            return
+        
+        # Concatenar las imágenes horizontalmente
+        imagen_unida = cv2.hconcat([imagen_entrada, imagen_salida])
+        
+        # Guardar la imagen resultante con el ID como nombre
+        nombre_archivo = f"{id_chaleco}.png"
+        cv2.imwrite(nombre_archivo, imagen_unida)
+        print(f"Imágenes unidas y guardadas como {nombre_archivo}")
 
-
-
+        # Eliminar las imágenes de entrada y salida
+        try:
+            os.remove(f"{id_chaleco}_ENTRADA.png")
+            os.remove(f"{id_chaleco}_SALIDA.png")
+            print("Imágenes individuales eliminadas.")
+        except OSError as e:
+            print(f"Error al eliminar las imágenes: {e}")
 
     def capturar_imagen_con_texto(self, nombre_archivo, qr_id, qr_lote, qr_serie):
         cam = cv2.VideoCapture(0)  # Abre la cámara
@@ -1096,19 +1117,7 @@ class ChalecoApp(App):
         cv2.imwrite(nombre_archivo, frame)
         cam.release()
         cv2.destroyAllWindows()
-
-    def cambiar_estado_campos(self, estado):
-        """Bloquea o desbloquea los campos de entrada."""
-        self.numero_serie_input.disabled = estado
-        self.fabricante_input.disabled = estado
-        self.fecha_fabricacion_input.disabled = estado
-        self.fecha_vencimiento_input.disabled = estado
-        self.tipo_modelo_input.disabled = estado
-        self.peso_input.disabled = estado
-        self.talla_spinner.disabled = estado
-        self.procedencia_input.disabled = estado
-
-
+ 
     def habilitar_boton_escanear_qr(self):
         """Rehabilita el botón de escaneo de QR."""
         self.scan_qr_button.disabled = False
@@ -1116,7 +1125,6 @@ class ChalecoApp(App):
 
 
     def scan_qr(self, instance):
-        global qr_last_seen, qr_last_time, qr_timer_started
         cap = cv2.VideoCapture(0)  # Abre la cámara local
         scan_manager = ScanManager()  # Instanciar el gestor de escaneo
 
@@ -1124,7 +1132,6 @@ class ChalecoApp(App):
             print("Error: No se puede abrir la cámara.")
             return
 
-        qr_accumulated_time = 0  # Tiempo acumulado para el QR detectado
         stop_scan = False  # Bandera para detener el escaneo
         start_time = time.time()  # Tiempo de inicio del escaneo
 
@@ -1141,20 +1148,21 @@ class ChalecoApp(App):
 
             # Decodificar el QR
             if frame_with_qr is not None:
-                qr_value = scan_manager.reader.decode_buffer(frame)[0].barcode_text if scan_manager.count_barcodes(frame) > 0 else ""
+                if scan_manager.count_barcodes(frame) > 0:
+                    qr_value = scan_manager.reader.decode_buffer(frame)[0].barcode_text
+                    print(f"QR detectado: {qr_value}")
 
-                if qr_value:
                     # Comprobar si el QR detectado es el mismo que se leyó previamente
-                    if qr_value == qr_last_seen:
-                        print("QR detectado y es el mismo.")
-                        # Proceder con el proceso de destrucción si es el mismo QR
+                    if qr_value == self.qr_last_seen:
+                        print("QR detectado y es el mismo. Habilitando botón de destrucción.")
                         self.habilitar_boton_destruccion()
                         stop_scan = True  # Detener el escaneo
                     else:
-                        print("El QR no coincide.")
+                        print("El QR no coincide. Actualizando último QR.")
+                        self.qr_last_seen = qr_value  # Actualizar el último QR detectado
                 else:
                     print("No se ha detectado ningún QR.")
-            
+
             # Mostrar el frame
             cv2.imshow('QR Scanner', frame_with_qr)
 
@@ -1169,6 +1177,7 @@ class ChalecoApp(App):
 
         cap.release()
         cv2.destroyAllWindows()
+
 
         
     # Definir la función habilitar_boton_destruccion
@@ -1199,26 +1208,34 @@ class ChalecoApp(App):
             return None
 
     def on_destruction_button(self, instance):
-        global qr_last_seen
-        print("Destrucción en proceso...")
-        print(f"QR último visto: {qr_last_seen}")
+        print("Iniciando verificación de destrucción...")
+        print(f"Último QR escaneado: {self.qr_last_seen}")
         
-        # Deshabilitar ambos botones cuando comienza el proceso de destrucción
+        # Deshabilitar el botón de destrucción temporalmente para evitar múltiples clics
         self.destruction_button.disabled = True
-        self.scan_qr_button.disabled = True
 
-        chaleco_data = self.obtener_datos_chaleco(qr_last_seen)
+        chaleco_data = self.obtener_datos_chaleco(self.qr_last_seen)
+        
         if chaleco_data:
             id, lote, numero_serie = chaleco_data
+            # Verificar si el chaleco ya ha sido destruido
+            if self.is_chaleco_destruido(id):
+                self.mostrar_popup("Chaleco Destruido", "Este chaleco ya está marcado como destruido.")
+                self.destruction_button.disabled = False  # Rehabilitar el botón
+                return  # Salir de la función si ya está destruido
+
+            # Continuar con el proceso de destrucción si no ha sido destruido
             nombre_archivo = f"{id}_ENTRADA.png"
             
             # Capturar imagen de la cámara y guardarla
             self.capturar_imagen(nombre_archivo, chaleco_data)
 
             # Iniciar el proceso de destrucción en un hilo separado
-            destruccion_thread = threading.Thread(target=self.verificar_destruccion, args=(qr_last_seen,))
+            destruccion_thread = threading.Thread(target=self.verificar_destruccion, args=(self.qr_last_seen,))
             destruccion_thread.start()
+
     
+
     def is_qr_in_database(self, qr_value):
         try:
             # Intentar separar el valor del QR por comas y espacios
