@@ -1,3 +1,9 @@
+"""
+Reparar la destruccion hacer el tiempo y dejar el arduino
+hacer carpeta para el infrome
+
+"""
+
 import tempfile
 import os
 import base64
