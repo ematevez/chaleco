@@ -1,6 +1,10 @@
 """
 Reparar la destruccion hacer el tiempo y dejar el arduino
-hacer carpeta para el infrome
+hacer carpeta para el infrome (verificar cuantos registros entran)
+agregar campo fecha_destruido en la creacion de la base de datos en caso de no estar
+
+unico 2 no funciona -> sacar que sirve y borrar
+
 
 """
 
@@ -171,7 +175,8 @@ class ChalecoApp(App):
                 qr_image BLOB,  
                 transmitido INTEGER DEFAULT 0,
                 destruido INTEGER DEFAULT 0,
-                informe INTEGER DEFAULT 0
+                informe INTEGER DEFAULT 0,
+                fecha_destruido TEXT
             )
         ''')
         self.conn.commit()
