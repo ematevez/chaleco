@@ -12,9 +12,11 @@ def update_transmitidos(db_path):
     # Actualizar el campo 'transmitido' a 0 para todos los registros
     # cursor.execute("UPDATE chalecos_receptora SET transmitido = 0;")
     # Actualizar el campo 'destruido' a 0 para todos los registros
-    # cursor.execute("UPDATE chalecos_receptora SET destruido = 0;")
+    cursor.execute("UPDATE chalecos_receptora SET destruido = 0;")
     # Actualizar el campo 'destruido' a 0 para todos los informe
-    cursor.execute("UPDATE chalecos_receptora SET informe = 0;")
+    # cursor.execute("UPDATE chalecos_receptora SET informe = 0;")
+    # Actualizar el campo 'destruido' a 0 para todos los informe
+    # cursor.execute("UPDATE chalecos_receptora SET fecha_destruido = 0;")
     
     # Guardar los cambios
     conn.commit()

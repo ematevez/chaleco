@@ -6,7 +6,6 @@ agregar campo fecha_destruido en la creacion de la base de datos en caso de no e
 unico 2 no funciona -> sacar que sirve y borrar
 
 """
-
 import tempfile
 import os
 import base64
@@ -20,6 +19,7 @@ from datetime import datetime
 import cv2
 import threading
 import time
+import serial
 
 from dbr import BarcodeReader, EnumBarcodeFormat, BarcodeReaderError
 
@@ -47,7 +47,6 @@ from reportlab.lib.pagesizes import A4 ,legal  # Para tamaño legal (215.9 x 355
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.platypus import Image
-
 
 # Inicializar licencia de Dynamsoft Barcode Reader (DBR)
 # BarcodeReader.init_license(
@@ -105,7 +104,24 @@ class DatePicker(BoxLayout):
             popup.open()
 
 class ChalecoApp(App):
-    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.arduino = None  # Inicialmente sin conexión
+
+    def iniciar_conexion_arduino(self):
+        """Inicia la conexión serie con el Arduino."""
+        try:
+            # Conecta al puerto COM3 a 9600 baudios
+            self.arduino = serial.Serial('COM4', 9600, timeout=1)
+            print("Conexión con Arduino establecida en COM3 a 9600 baudios.")
+        except serial.SerialException as e:
+            print(f"Error al conectar con Arduino: {e}")
+            self.arduino = None
+    def cerrar_conexion_arduino(self):
+        """Cierra la conexión con el Arduino al salir de la aplicación."""
+        if self.arduino and self.arduino.is_open:
+            self.arduino.close()
+            print("Conexión con Arduino cerrada.")
     def obtener_ip_local(self):
         """Obtiene la IP local de la máquina en la red."""
         try:
@@ -133,8 +149,16 @@ class ChalecoApp(App):
         except Exception as e:
             print(f"Error al obtener la IP local: {str(e)}")
             return '127.0.0.1'  # Devuelve localhost si ocurre algún error
-
     def build(self):
+        
+        self.iniciar_conexion_arduino()
+        
+           # Si el Arduino no está conectado, deshabilitar el botón de escaneo
+        if not self.arduino or not self.arduino.is_open:
+            print("Arduino no conectado. Deshabilitando funciones dependientes.")
+            self.scan_qr_button.disabled = True  # Deshabilitar el escaneo QR
+        else:
+            print("Arduino conectado correctamente.")
         # Configurar la ventana en pantalla completa
         # Window.fullscreen = True  # Puedes usar 'auto' o True
         self.conn = sqlite3.connect('chalecos.db', check_same_thread=False)
@@ -153,6 +177,13 @@ class ChalecoApp(App):
         Window.bind(on_key_down=self.on_key_down)
         
         return self.root
+    def on_stop(self):
+        """Se ejecuta al cerrar la aplicación."""
+        self.cerrar_conexion_arduino()
+        if self.conn:
+            self.conn.close()
+            print("Base de datos cerrada correctamente.")
+        print("Aplicación cerrada correctamente.")
 
     # Añadir columna qr_imagen en la tabla si no existe
     def create_db(self):
@@ -173,12 +204,10 @@ class ChalecoApp(App):
                 transmitido INTEGER DEFAULT 0,
                 destruido INTEGER DEFAULT 0,
                 informe INTEGER DEFAULT 0,
-                fecha_destruido TEXT
+                fecha_destruido TEXT DEFAULT 0
             )
         ''')
         self.conn.commit()
-
-
     def create_widgets(self):
         # Crear campos de texto con botones para seleccionar fecha
         self.lote_input = TextInput(hint_text='Lote (autogenerado)', disabled=True)
@@ -231,7 +260,6 @@ class ChalecoApp(App):
         self.boton_secreto.bind(on_press=self.accion_secreta)
         self.root.add_widget(self.boton_secreto)
         
-        
         # Añadir los widgets a la interfaz
         self.root.add_widget(self.lote_input)
         self.root.add_widget(self.numero_serie_input)
@@ -258,7 +286,6 @@ class ChalecoApp(App):
         self.root.add_widget(self.finalizar_lote_button)
         self.root.add_widget(self.transmitir_wifi_button)
         self.root.add_widget(self.ver_registro_button)
-
         
     # Función que muestra el popup para solicitar la clave
     def solicitar_clave(self, instance):
@@ -273,7 +300,6 @@ class ChalecoApp(App):
 
         self.popup_clave = Popup(title='Ingresar clave', content=popup_content, size_hint=(0.6, 0.4))
         self.popup_clave.open()
-
     def mostrar_boton_secreto(self):
         # Mostrar el botón secreto
         self.boton_secreto.size_hint = (None, None)
@@ -281,7 +307,6 @@ class ChalecoApp(App):
         self.boton_secreto.text = "Botón Secreto"
         self.boton_secreto.opacity = 1  # Hacer el botón visible
         self.boton_secreto.disabled = False  # Asegurarse de que esté habilitado
-
     # Función para verificar la clave
     def verificar_clave(self, clave_ingresada):
         if clave_ingresada == '31521775':
@@ -303,13 +328,12 @@ class ChalecoApp(App):
 
         self.popup_ip = Popup(title='Configurar IP', content=popup_content, size_hint=(0.6, 0.4))
         self.popup_ip.open()
-
     # Función para guardar la nueva IP
     def guardar_ip(self, nueva_ip):
         self.ip_destino = nueva_ip  # Actualizar la IP de destino
         self.popup_ip.dismiss()  # Cerrar el popup de configuración
         self.mostrar_popup('Éxito', f'IP actualizada a {nueva_ip}')
-
+        
     def generar_informe(self, instance):
         # Generar el PDF del informe de destrucción de chalecos
         pdf_path = self.crear_pdf_informe_destruccion()
@@ -318,7 +342,7 @@ class ChalecoApp(App):
             self.mostrar_popup('Informe Generado', f'El informe ha sido generado en: {pdf_path}')
         else:
             self.mostrar_popup('Error', 'No se pudo generar el informe.')
-
+            
     def crear_pdf_informe_destruccion(self):
         cursor = self.conn.cursor()
         cursor.execute("SELECT id, lote, numero_serie, fabricante, tipo_modelo, fecha_fabricacion, fecha_vencimiento, fecha_destruido FROM chalecos_receptora WHERE destruido = 1 AND informe = 0")
@@ -416,16 +440,6 @@ class ChalecoApp(App):
             y_position = agregar_registro(chaleco, y_position)
             registros_contados += 1
 
-        # Espacio para firmas (3 firmas)
-        # c.setFont("Helvetica-Bold", 10)
-        # y_firma = 100
-        # c.drawString(100, y_firma, "____________________________")
-        # c.drawString(350, y_firma, "____________________________")
-        # c.drawString(600, y_firma, "____________________________")
-        # c.drawString(100, y_firma - 20, "Firma 1")
-        # c.drawString(350, y_firma - 20, "Firma 2")
-        # c.drawString(600, y_firma - 20, "Firma 3")
-
         c.save()
 
         # Marcar chalecos como "informe generado"
@@ -434,8 +448,7 @@ class ChalecoApp(App):
 
         return pdf_path
 
-
-# Validar que la fecha de vencimiento sea mayor a la fecha de fabricación
+    # Validar que la fecha de vencimiento sea mayor a la fecha de fabricación
     def validar_orden_fechas(self):
         """Valida que la fecha de vencimiento sea mayor que la de fabricación"""
         try:
@@ -456,7 +469,6 @@ class ChalecoApp(App):
     def accion_secreta(self, instance):
         # Aquí defines qué quieres que haga el botón secreto
         self.mostrar_popup('Acción Secreta', '¡Has activado el botón secreto!')
-
 
     # Función para verificar duplicados
     def verificar_lote_existente(self, lote):
@@ -484,7 +496,7 @@ class ChalecoApp(App):
         self.comenzar_lote_button.disabled = True
 
         self.mostrar_popup('Lote Comenzado', f'Se ha comenzado el lote: {lote_numero}')
-
+        
     def agregar_chaleco(self, instance):
         try:
             if not self.campos_llenos():
@@ -512,7 +524,6 @@ class ChalecoApp(App):
     
         except Exception as e:
             self.mostrar_popup('Error', f'Error inesperado: {str(e)}')
-
 
     def limpiar_campos(self):
         self.numero_serie_input.text = ''
@@ -600,7 +611,6 @@ class ChalecoApp(App):
         if posicion[0] < 50 and posicion[1] > (Window.height - 50):
             # Solicitar clave cuando se haga clic en la esquina
             self.solicitar_clave(None)  # Llama a la función que solicita la clave
-      
 
     def crear_pdf_qr(self, qr_image_data, lote):
         # Crear un archivo temporal para el PDF
@@ -644,7 +654,6 @@ class ChalecoApp(App):
         except Exception as e:
             print(f"Error al guardar el QR para el chaleco ID {chaleco_id}: {e}")
 
-        
     def imprimir_qr(self, qr_image_data, popup):
         # Obtener el número de lote para el nombre del archivo PDF
         lote = self.lote_input.text
@@ -665,7 +674,6 @@ class ChalecoApp(App):
 
         # Cerrar el popup de éxito
         popup.dismiss()
-
 
     def finalizar_lote(self, instance):
         # Obtener el lote actual
@@ -715,13 +723,9 @@ class ChalecoApp(App):
         # Limpiar los campos de entrada
         self.limpiar_campos()
         
-    
         self.add_chaleco_button.disabled = True
         self.finalizar_lote_button.disabled = True
-        self.comenzar_lote_button.disabled = False
-
-        
-    
+        self.comenzar_lote_button.disabled = False          
 
     def abrir_pantalla_transmision(self, instance):
         # Crear la nueva ventana para seleccionar los registros
@@ -791,7 +795,6 @@ class ChalecoApp(App):
                 else:
                     qr_image_base64 = 'No QR available'
 
-
                 # Agregar los datos como un diccionario (más fácil de convertir a JSON)
                 datos_transmitir.append({
                     "Id": reg[0],
@@ -819,10 +822,6 @@ class ChalecoApp(App):
             # Mostrar mensaje de error si no se seleccionó ningún registro
             self.mostrar_popup('Error', 'No se seleccionaron registros para transmitir')
 
-
-
-
-
     def marcar_registros_como_transmitidos(self, registros_seleccionados):
         cursor = self.conn.cursor()
         for registro in registros_seleccionados:
@@ -843,11 +842,6 @@ class ChalecoApp(App):
             # Convertir la lista de datos en JSON
             datos_json = json.dumps({"data": datos})
 
-            # Mostrar datos JSON para depuración===========
-            #print("=================datos_json=========")
-            #print(datos_json)
-            #================================================
-            # Enviar los datos al servidor
             sock.sendall(datos_json.encode('utf-8'))
 
             # Recibir confirmación del servidor
@@ -948,8 +942,6 @@ class ChalecoApp(App):
         )
         self.popup_ver_registro.open()
 
-
-
     def on_key_down(self, window, key, *args):
         if key == 273:  # Código de tecla para Flecha arriba
             self.cambiar_foco(-1)
@@ -990,7 +982,6 @@ class ChalecoApp(App):
                     if hasattr(next_widget, 'focus'):
                         next_widget.focus = True
                         break  # Salir del bucle cuando encontramos un widget válido
-
 
     def campos_llenos(self):
         return all([
@@ -1101,37 +1092,107 @@ class ChalecoApp(App):
 
 
     def verificar_destruccion(self, qr_value):
-        """Simula el proceso de destrucción del chaleco escaneado."""
+        """Realiza el proceso completo de destrucción del chaleco."""
         try:
-            # Aquí puedes agregar la lógica de verificación y destrucción
-            print(f"Verificando y destruyendo el chaleco con QR: {qr_value}")
-            
-            # Simular un proceso de destrucción
-            time.sleep(3)  # Esperar 3 segundos para simular el proceso de destrucción
-            
-            # Actualizar la base de datos para marcar el chaleco como destruido
+            print(f"Comenzando el proceso de destrucción para QR: {qr_value}")
+
+            # Paso 1: Enviar señal al Arduino para activar el relé
+            self.enviar_senal_arduino()
+
+            # Paso 2: Esperar 20 segundos antes de abrir la cámara 2
+            time.sleep(20)
+            print("Esperando 20 segundos antes de abrir la cámara 2.")
+
+            # Paso 3: Abrir cámara 2 para verificar la presencia del QR
+            if not self.verificar_qr_con_camara_2(qr_value):
+                print("Error: No se detectó el QR después de 60 segundos.")
+                self.mostrar_popup("Error", "QR no detectado. Proceso fallido.")
+                return
+
+            # Paso 4: Capturar la imagen de salida
             qr_parts = qr_value.split(", ")
             qr_id = qr_parts[0].split(": ")[1]
             qr_lote = qr_parts[1].split(": ")[1]
             qr_serie = qr_parts[2].split(": ")[1]
-
-            cursor = self.conn.cursor()
-            cursor.execute("UPDATE chalecos_receptora SET destruido = 1 WHERE id = ? AND lote = ? AND numero_serie = ?", (qr_id, qr_lote, qr_serie))
-            self.conn.commit()
-            
-            # Capturar imagen después de la destrucción y escribir "DESTRUIDO" en rojo y negrita
             self.capturar_imagen_con_texto(f"{qr_id}_SALIDA.png", qr_id, qr_lote, qr_serie)
+
+             # Paso 5: Actualizar la base de datos con la fecha de destrucción
+            cursor = self.conn.cursor()
+            fecha_actual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Fecha actual
+            cursor.execute("""
+                UPDATE chalecos_receptora 
+                SET destruido = 1, fecha_destruido = ?
+                WHERE id = ? AND lote = ? AND numero_serie = ?
+            """, (fecha_actual, qr_id, qr_lote, qr_serie))
+            self.conn.commit()
+
+            # Paso 6: Combinar imágenes (monoimagen)
             self.combinar_imagenes(qr_id)
 
-            # Volver a habilitar el botón de escaneo QR
+            # Finalizar
             Clock.schedule_once(lambda dt: self.habilitar_boton_escanear_qr(), 0)
-            print(f"Chaleco {qr_id} destruido exitosamente.")
+            print(f"Proceso de destrucción para QR {qr_value} completado con éxito.")
+
         except Exception as e:
-            print(f"Error durante la destrucción: {str(e)}")
+            print(f"Error en el proceso de destrucción: {e}")
+
+    def enviar_senal_arduino(self):
+        """Envía una señal al Arduino para activar el relé."""
+        try:
+            if self.arduino:
+                self.arduino.write(b'ACTIVATE\n')
+                print("Señal enviada al Arduino para activar el relé.")
+            else:
+                print("Arduino no conectado.")
+        except Exception as e:
+            print(f"Error al enviar señal al Arduino: {e}")
+
+    def verificar_qr_con_camara_2(self, qr_value):
+        """Abre la cámara 2 y verifica la presencia del QR. Si el QR no aparece en 60 segundos, genera un error."""
+        print("Abriendo cámara 2 para verificar QR...")
+        cam = cv2.VideoCapture(1)  # Cámara 2
+        start_time = time.time()
+
+        if not cam.isOpened():
+            print("Error: No se puede abrir la cámara 2.")
+            return False
+
+        while time.time() - start_time < 60:  # Esperar hasta 60 segundos
+            ret, frame = cam.read()
+            if not ret:
+                print("Error al capturar imagen de la cámara 2.")
+                continue
+
+            # Decodificar el QR en el frame
+            qr_value_detectado = self.decode_qr(frame)
+            if qr_value_detectado == qr_value:
+                print(f"QR detectado correctamente: {qr_value_detectado}")
+                
+                # Enviar señal al Arduino para detener el relé
+                if self.arduino:
+                    self.arduino.write(b'STOP\n')
+                    print("Señal de parada enviada al Arduino.")
+                cam.release()
+                return True
+
+        # Si no se detecta el QR en 60 segundos
+        cam.release()
+        return False
+    def decode_qr(self, frame):
+        """Decodifica el QR de una imagen y devuelve su valor."""
+        try:
+            scan_manager = ScanManager()  # Instancia de tu clase para manejar el escaneo
+            if scan_manager.count_barcodes(frame) > 0:
+                result = scan_manager.reader.decode_buffer(frame)[0].barcode_text
+                return result
+            return ""
+        except Exception as e:
+            print(f"Error al decodificar QR: {e}")
+            return ""
     
     def capturar_imagen_con_texto(self, nombre_archivo, qr_id, qr_lote, qr_serie):
 #! ACA TIENE QUE IR LA CAMARA DE SALIDA        
-        cam = cv2.VideoCapture(0)  # Abre la cámara
+        cam = cv2.VideoCapture(1)  # Abre la cámara
 
         if not cam.isOpened():
             print("Error: No se puede abrir la cámara.")
@@ -1178,8 +1239,13 @@ class ChalecoApp(App):
 
     def scan_qr(self, instance):
         global qr_last_seen, qr_last_time, qr_timer_started
+        
+        if not self.arduino or not self.arduino.is_open:
+            self.mostrar_popup("Error", "Arduino no conectado. No se puede iniciar el escaneo.")
+            return
+        
 #! ACA TIENE QUE IR LA CAMARA DE ENTRADA         
-        cap = cv2.VideoCapture(1)  # Abre la cámara local
+        cap = cv2.VideoCapture(0)  # Abre la cámara local
         scan_manager = ScanManager()  # Instanciar el gestor de escaneo
 
         if not cap.isOpened():
