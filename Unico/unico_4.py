@@ -1432,7 +1432,7 @@ class ChalecoApp(App):
 
     def capturar_imagen(self, nombre_archivo, chaleco_data):
         id, lote, numero_serie = chaleco_data
-        cam = cv2.VideoCapture(1)  # Abre la cámara
+        cam = cv2.VideoCapture(0)  # Abre la cámara
 
         if not cam.isOpened():
             print("Error: No se puede abrir la cámara.")
