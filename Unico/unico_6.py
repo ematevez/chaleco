@@ -99,6 +99,7 @@ class DatePicker(BoxLayout):
 class ChalecoApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        Window.fullscreen = "auto" 
         self.arduino = None  
         
         base_desktop = r"C:\Users\Lgistica\Desktop"
