@@ -154,11 +154,11 @@ class ChalecoApp(App):
         self.iniciar_conexion_arduino()
         
            # Si el Arduino no está conectado, deshabilitar el botón de escaneo
-        if not self.arduino or not self.arduino.is_open:
-            print("Arduino no conectado. Deshabilitando funciones dependientes.")
-            self.scan_qr_button.disabled = True  # Deshabilitar el escaneo QR
-        else:
-            print("Arduino conectado correctamente.")
+        # if not self.arduino or not self.arduino.is_open:
+        #     print("Arduino no conectado. Deshabilitando funciones dependientes.")
+        #     self.scan_qr_button.disabled = True  # Deshabilitar el escaneo QR
+        # else:
+        #     print("Arduino conectado correctamente.")
         # Configurar la ventana en pantalla completa
         # Window.fullscreen = True  # Puedes usar 'auto' o True
         self.conn = sqlite3.connect('chalecos.db', check_same_thread=False)
@@ -1116,7 +1116,7 @@ class ChalecoApp(App):
             qr_serie = qr_parts[2].split(": ")[1]
             self.capturar_imagen_con_texto(f"{qr_id}_SALIDA.png", qr_id, qr_lote, qr_serie)
 
-             # Paso 5: Actualizar la base de datos con la fecha de destrucción
+            # Paso 5: Actualizar la base de datos con la fecha de destrucción
             cursor = self.conn.cursor()
             fecha_actual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Fecha actual
             cursor.execute("""
