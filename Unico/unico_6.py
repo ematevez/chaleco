@@ -983,8 +983,13 @@ class ChalecoApp(App):
         cv2.imwrite(imagen_final_path, imagen_combinada)
         print(f"Imagen combinada guardada en: {imagen_final_path}")
 
-        print("Las imágenes parciales no fueron eliminadas y siguen en su ubicación original.")
-
+            # Eliminar imágenes parciales
+        try:
+            os.remove(entrada_path)
+            os.remove(salida_path)
+            print("Imágenes parciales eliminadas correctamente.")
+        except OSError as e:
+            print(f"Error al eliminar las imágenes parciales: {e}")
 
     def verificar_destruccion(self, qr_value):
         """Realiza el proceso completo de destrucción del chaleco."""
