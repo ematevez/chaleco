@@ -57,4 +57,4 @@ def ejecutar_simulador(intentos_max=100):
         print(f"No se encontró repetición en {intentos_max} intentos.")
 
 # Ejecutar el simulador con 100 intentos
-ejecutar_simulador(intentos_max=1000000000000000000)
+ejecutar_simulador(intentos_max=1.000.000.000.000.000.000)

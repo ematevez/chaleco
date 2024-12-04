@@ -116,7 +116,7 @@ print("El programa continúa...")
 
 CODIFICAR MAC Y VERIFICAR EL CODIFICADO DE LA BASE DE DATOS
 
-
+unico_6.py es el funcional -> scripts para mantenimiento de varios
 
 ###==================================================================
 Ejemplo completo para una aplicación de Kivy:

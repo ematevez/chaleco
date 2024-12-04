@@ -18,6 +18,8 @@ import serial
 import hashlib
 import uuid
 
+# from serial import Serial, SerialException
+
 from dbr import BarcodeReader, EnumBarcodeFormat, BarcodeReaderError
 
 from kivy.app import App
