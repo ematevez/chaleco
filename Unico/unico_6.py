@@ -209,7 +209,7 @@ class ChalecoApp(App):
             fecha_limite = fecha_creacion + timedelta(days=15)
             print(f"Fecha límite: {fecha_limite}")
 
-            if fecha_actual > fecha_limite:
+            if fecha_actual < fecha_limite:
                 self.mostrar_popup('Error', 'El programa ha expirado. Contacte al administrador.')
                 return False
         else:
@@ -1047,6 +1047,7 @@ class ChalecoApp(App):
     def verificar_qr_con_camara_2(self, qr_value):
         """Abre la cámara 2 y verifica la presencia del QR. Si el QR no aparece en 60 segundos, genera un error."""
         print("Abriendo cámara 2 para verificar QR...")
+    #!VERIFICAR QUE CAMARA ES
         cam = cv2.VideoCapture(0)  # Cámara 2
         start_time = time.time()
 
@@ -1308,6 +1309,8 @@ class ChalecoApp(App):
 
     def capturar_imagen(self, nombre_archivo, chaleco_data):
         id, lote, numero_serie = chaleco_data
+        
+    #!REVISAR QUE CAMARA ES
         cam = cv2.VideoCapture(0)  # Abre la cámara
 
         if not cam.isOpened():
