@@ -230,11 +230,11 @@ class ChalecoApp(App):
         
         if not self.validar_mac():
             print("Falla en la validación de MAC")
-            exit(1)
+            # exit(1)
 
         if not self.validar_codigo_y_fecha():
             print("Falla en la validación de código y fecha")
-            exit(1)
+            # exit(1)
         
         self.root = BoxLayout(orientation='vertical', padding=10, spacing=10)
         self.create_widgets()
